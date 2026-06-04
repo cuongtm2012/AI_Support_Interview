@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-surface-base font-sans text-slate-100 antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(45, 212, 191, 0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(15, 118, 110, 0.06), transparent);
+  }
+
+  ::selection {
+    @apply bg-accent/30 text-white;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-surface-base;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-2xl border border-white/[0.08] bg-surface-card/80 shadow-panel backdrop-blur-xl;
+  }
+
+  .glass-panel-header {
+    @apply flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5;
+  }
+
+  .label-caps {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-white/[0.1] bg-surface-base/80 px-3.5 py-2.5 text-sm text-slate-200 transition duration-200 placeholder:text-slate-600 focus:border-accent/50 focus:ring-1 focus:ring-accent/30;
+  }
+
+  .select-field {
+    @apply input-field cursor-pointer appearance-none bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  }
+}
+
+.text-size-small {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.text-size-medium {
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.text-size-large {
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+
+.interim-text {
+  @apply italic text-slate-500;
+}
+
+.final-text {
+  @apply font-medium text-slate-100;
+}
+
+html.light body {
+  @apply bg-slate-50 text-slate-900;
+  background-image: none;
+}
+
+html.light .glass-panel {
+  @apply border-slate-200/80 bg-white/90 shadow-lg;
+}
+
+html.light .input-field,
+html.light .select-field {
+  @apply border-slate-200 bg-white text-slate-800;
+}
+
+html.light .final-text {
+  @apply text-slate-900;
+}
+
+html.light .interim-text {
+  @apply text-slate-500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

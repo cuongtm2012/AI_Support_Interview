@@ -1,0 +1,90 @@
+import type {
+  AnswerStyle,
+  AnswerLanguage,
+  LanguageCode,
+  QuestionType,
+} from "@/types";
+import { apiKeyHeaders, getDeepseekApiKey } from "@/lib/api-keys";
+
+export interface GenerateAnswerParams {
+  question: string;
+  questionType: QuestionType;
+  profileText: string;
+  jdText: string;
+  answerStyle: AnswerStyle;
+  answerLanguage: AnswerLanguage;
+  targetLanguage: LanguageCode;
+  onChunk: (text: string) => void;
+  signal?: AbortSignal;
+}
+
+function resolveAnswerLang(
+  answerLanguage: AnswerLanguage,
+  targetLanguage: LanguageCode
+): string {
+  if (answerLanguage === "Vietnamese") return "tiếng Việt";
+  if (answerLanguage === "English") return "tiếng Anh";
+  return targetLanguage === "vi" ? "tiếng Việt" : "tiếng Anh";
+}
+
+export async function generateAnswerStreaming(
+  params: GenerateAnswerParams
+): Promise<void> {
+  const key = getDeepseekApiKey();
+  if (!key) {
+    throw new Error("DeepSeek API key chưa được cấu hình (Settings → API Keys)");
+  }
+
+  const lang = resolveAnswerLang(
+    params.answerLanguage,
+    params.targetLanguage
+  );
+
+  const res = await fetch("/api/answer", {
+    method: "POST",
+    headers: apiKeyHeaders(key),
+    body: JSON.stringify({
+      question: params.question,
+      questionType: params.questionType,
+      profileText: params.profileText,
+      jdText: params.jdText,
+      answerStyle: params.answerStyle,
+      answerLanguage: lang,
+    }),
+    signal: params.signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error || "Answer generation failed"
+    );
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response stream");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(payload) as { text?: string };
+        if (parsed.text) params.onChunk(parsed.text);
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
+}

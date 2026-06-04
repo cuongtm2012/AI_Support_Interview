@@ -1,0 +1,18 @@
+{
+  "name": "Interview Copilot",
+  "short_name": "Copilot",
+  "description": "AI real-time interview assistant — STT, translate, suggested answers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b10",
+  "theme_color": "#2dd4bf",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
