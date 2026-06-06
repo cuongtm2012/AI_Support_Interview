@@ -12,7 +12,7 @@ import { IconMic, IconStop } from "@/components/ui/Icons";
 
 export function MicControl() {
   const isListening = useTranscriptStore((s) => s.isListening);
-  const questionCount = useTranscriptStore((s) => s.questionHistory.length);
+  const questionCount = useTranscriptStore((s) => s.qnaCards.length);
   const hasSession = useInterviewSessionStore((s) => !!s.dbSessionId);
   const { micDeviceId, profileText, setSettings } = useSettingsStore();
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);

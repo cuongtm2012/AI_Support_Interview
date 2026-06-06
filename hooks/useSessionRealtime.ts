@@ -14,8 +14,8 @@ export function useSessionRealtime() {
     if (!sessionId) return;
 
     const unsubscribe = subscribeToSessionQuestions(sessionId, (q) => {
-      const { questionHistory, addToHistory } = useTranscriptStore.getState();
-      const exists = questionHistory.some(
+      const { qnaCards, syncQnaCardFromRemote } = useTranscriptStore.getState();
+      const exists = qnaCards.some(
         (h) =>
           h.original === q.transcript_raw &&
           (h.answer || "") === (q.ai_answer || "")
@@ -27,7 +27,7 @@ export function useSessionRealtime() {
         ? rawType
         : "behavioral";
 
-      addToHistory({
+      syncQnaCardFromRemote({
         original: q.transcript_raw,
         translated: q.transcript_vi ?? "",
         answer: q.ai_answer ?? "",

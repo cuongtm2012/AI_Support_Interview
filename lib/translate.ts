@@ -1,20 +1,29 @@
 import type { LanguageCode } from "@/types";
-import { apiKeyHeaders, getGoogleTranslateApiKey } from "@/lib/api-keys";
+import { apiKeyHeaders, getDeepseekApiKey, getGoogleTranslateApiKey } from "@/lib/api-keys";
+import {
+  getTranslationProvider,
+  shouldTranslate,
+} from "@/lib/translation-config";
 
 export async function translateText(
   text: string,
   source: LanguageCode,
   target: LanguageCode
 ): Promise<string> {
-  const key = getGoogleTranslateApiKey();
-  if (!key) {
-    throw new Error("NO_GOOGLE_KEY");
+  if (!shouldTranslate(source, target)) {
+    throw new Error("NO_TRANSLATION");
   }
+
+  const provider = getTranslationProvider();
+  const key =
+    provider === "google" ? getGoogleTranslateApiKey() : getDeepseekApiKey();
+
+  if (!key) throw new Error("NO_TRANSLATION");
 
   const res = await fetch("/api/translate", {
     method: "POST",
     headers: apiKeyHeaders(key),
-    body: JSON.stringify({ text, source, target }),
+    body: JSON.stringify({ text, source, target, provider }),
   });
 
   if (!res.ok) {

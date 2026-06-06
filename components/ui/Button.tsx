@@ -4,6 +4,7 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "live";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  size?: "sm" | "md";
   icon?: ReactNode;
   children: ReactNode;
 }
@@ -18,8 +19,14 @@ const variants: Record<Variant, string> = {
   live: "bg-live text-surface-base hover:bg-amber-400 disabled:opacity-40",
 };
 
+const sizes = {
+  sm: "gap-1.5 rounded-lg px-3 py-1.5 text-xs",
+  md: "gap-2 rounded-xl px-4 py-2.5 text-sm",
+};
+
 export function Button({
   variant = "secondary",
+  size = "md",
   icon,
   children,
   className = "",
@@ -28,7 +35,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base disabled:cursor-not-allowed ${variants[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center font-medium transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base disabled:cursor-not-allowed ${sizes[size]} ${variants[variant]} ${className}`}
       {...props}
     >
       {icon}

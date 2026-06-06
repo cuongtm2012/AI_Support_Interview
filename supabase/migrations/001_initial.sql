@@ -101,5 +101,6 @@ create policy "Users can insert own questions"
     )
   );
 
--- Realtime (optional — enable in Supabase Dashboard > Database > Publications)
--- alter publication supabase_realtime add table public.questions;
+-- Realtime — see 004_enable_realtime_questions.sql
+
+-- Revoke public execute on trigger function — see 003_revoke_handle_new_user_execute.sql

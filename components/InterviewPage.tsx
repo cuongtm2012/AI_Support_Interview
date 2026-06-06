@@ -3,27 +3,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PiPZone } from "@/components/PiPZone";
-import { AnswerPanel } from "@/components/AnswerPanel";
+import { QnaMainPanel } from "@/components/QnaMainPanel";
 import { TranscriptPanel } from "@/components/TranscriptPanel";
 import { MicControl } from "@/components/MicControl";
 import { SettingsModal } from "@/components/SettingsModal";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ApiKeyBanner } from "@/components/ApiKeyBanner";
 import { LoginBanner } from "@/components/LoginBanner";
+import { AuthErrorBanner } from "@/components/AuthErrorBanner";
 import { AuthButton } from "@/components/AuthButton";
 import { IconSettings, IconHistory } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/Panel";
-import { useTranscriptStore } from "@/stores/transcript";
-import { stopListening } from "@/lib/pipeline";
+import { stopListening, regenerateAnswer } from "@/lib/pipeline";
+import { useInterviewStatus } from "@/hooks/useInterviewStatus";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
+import { useMeetingStreamStore } from "@/stores/meeting-stream";
 import { ExportTranscriptButton } from "@/components/ExportTranscriptButton";
 import { InstallPwa } from "@/components/InstallPwa";
 import { RecapScreen } from "@/components/RecapScreen";
 
 export function InterviewPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const isListening = useTranscriptStore((s) => s.isListening);
+  const interviewStatus = useInterviewStatus();
+  const hasMeeting = useMeetingStreamStore((s) => !!s.stream);
 
   useSessionRealtime();
 
@@ -34,7 +37,7 @@ export function InterviewPage() {
         document.getElementById("mic-toggle")?.click();
       }
       if (e.key === "r" || e.key === "R") {
-        document.getElementById("regenerate-btn")?.click();
+        void regenerateAnswer();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -56,12 +59,12 @@ export function InterviewPage() {
               Interview Copilot
             </h1>
             <p className="text-xs text-slate-500">
-              Real-time STT · Translate · AI answers
+              STT real-time · Q&A unified · Dịch & AI tùy chọn
             </p>
           </div>
           <StatusDot
-            active={isListening}
-            label={isListening ? "Listening" : "Idle"}
+            tone={interviewStatus.tone}
+            label={interviewStatus.label}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -86,23 +89,26 @@ export function InterviewPage() {
         </div>
       </header>
 
+      <AuthErrorBanner />
       <LoginBanner />
       <ApiKeyBanner onOpenSettings={() => setSettingsOpen(true)} />
 
       <main className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:flex-row">
-        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 lg:w-[min(340px,28vw)]">
-          <div className="min-h-[200px] flex-1 lg:min-h-0">
-            <PiPZone />
-          </div>
+        <aside
+          className={`flex min-h-0 w-full shrink-0 flex-col gap-3 lg:w-[min(300px,26vw)] ${
+            hasMeeting ? "" : "lg:max-w-xs"
+          }`}
+        >
+          <PiPZone compact={!hasMeeting} />
           <HistoryPanel />
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AnswerPanel />
+          <QnaMainPanel />
         </div>
       </main>
 
-      <footer className="shrink-0 space-y-3 border-t border-white/[0.06] bg-surface-elevated/60 p-4 backdrop-blur-xl">
+      <footer className="shrink-0 space-y-2 border-t border-white/[0.06] bg-surface-elevated/60 p-4 backdrop-blur-xl">
         <TranscriptPanel />
         <div className="flex flex-wrap items-center gap-3">
           <MicControl />

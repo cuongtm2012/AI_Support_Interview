@@ -1,13 +1,14 @@
 import { create } from "zustand";
-import type { QuestionHistoryItem } from "@/types";
+import type { QnaCard, QuestionType } from "@/types";
+import { qnaCardsToHistory } from "@/lib/qna-utils";
 
 interface TranscriptStore {
   interimText: string;
-  finalText: string;
-  translatedText: string;
+  interimTranslated: string;
   isListening: boolean;
   confidence: number | null;
-  questionHistory: QuestionHistoryItem[];
+  qnaCards: QnaCard[];
+  highlightCardId: string | null;
   autoScroll: boolean;
   deepgramStatus:
     | "idle"
@@ -19,11 +20,27 @@ interface TranscriptStore {
   translationCache: Map<string, string>;
   transcriptCache: Set<string>;
 
+  /** Derived for export/recap — cards converted to history items */
+  questionHistory: ReturnType<typeof qnaCardsToHistory>;
+
   setInterim: (text: string, confidence?: number | null) => void;
-  setFinal: (text: string, confidence?: number | null) => void;
-  setTranslated: (text: string) => void;
+  setInterimTranslated: (text: string) => void;
   setListening: (listening: boolean) => void;
-  addToHistory: (item: Omit<QuestionHistoryItem, "id">) => void;
+  addQnaCard: (item: {
+    original: string;
+    confidence: number;
+  }) => string;
+  updateQnaCard: (id: string, patch: Partial<QnaCard>) => void;
+  appendQnaAnswer: (id: string, chunk: string) => void;
+  scrollToCard: (id: string) => void;
+  syncQnaCardFromRemote: (item: {
+    original: string;
+    translated: string;
+    answer: string;
+    questionType: QuestionType;
+    timestamp: number;
+  }) => void;
+  clearHighlight: () => void;
   setAutoScroll: (v: boolean) => void;
   setDeepgramStatus: (
     status: "idle" | "connected" | "reconnecting" | "disconnected" | "error",
@@ -38,36 +55,87 @@ interface TranscriptStore {
   clearSession: () => void;
 }
 
+function withHistory(cards: QnaCard[]) {
+  return { qnaCards: cards, questionHistory: qnaCardsToHistory(cards) };
+}
+
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   interimText: "",
-  finalText: "",
-  translatedText: "",
+  interimTranslated: "",
   isListening: false,
   confidence: null,
-  questionHistory: [],
+  qnaCards: [],
+  highlightCardId: null,
   autoScroll: true,
   deepgramStatus: "idle",
   reconnectAttempt: 0,
   translationCache: new Map(),
   transcriptCache: new Set(),
+  questionHistory: [],
 
   setInterim: (text, confidence = null) =>
     set({ interimText: text, confidence }),
 
-  setFinal: (text, confidence = null) =>
-    set({ finalText: text, interimText: "", confidence }),
-
-  setTranslated: (text) => set({ translatedText: text }),
+  setInterimTranslated: (text) => set({ interimTranslated: text }),
 
   setListening: (listening) => set({ isListening: listening }),
 
-  addToHistory: (item) =>
+  addQnaCard: ({ original, confidence }) => {
+    const id = crypto.randomUUID();
+    const card: QnaCard = {
+      id,
+      original,
+      translated: null,
+      answer: null,
+      questionType: null,
+      status: "transcribing",
+      confidence,
+      timestamp: Date.now(),
+      error: null,
+    };
     set((s) => ({
-      questionHistory: [
-        { ...item, id: crypto.randomUUID() },
-        ...s.questionHistory,
-      ].slice(0, 50),
-    })),
+      interimText: "",
+      interimTranslated: "",
+      ...withHistory([...s.qnaCards, card]),
+    }));
+    return id;
+  },
+
+  updateQnaCard: (id, patch) =>
+    set((s) => {
+      const cards = s.qnaCards.map((c) =>
+        c.id === id ? { ...c, ...patch } : c
+      );
+      return withHistory(cards);
+    }),
+
+  appendQnaAnswer: (id, chunk) =>
+    set((s) => {
+      const cards = s.qnaCards.map((c) =>
+        c.id === id ? { ...c, answer: (c.answer ?? "") + chunk } : c
+      );
+      return withHistory(cards);
+    }),
+
+  scrollToCard: (id) => set({ highlightCardId: id }),
+
+  syncQnaCardFromRemote: (item) => {
+    const id = crypto.randomUUID();
+    const card: QnaCard = {
+      id,
+      original: item.original,
+      translated: item.translated || null,
+      answer: item.answer || null,
+      questionType: item.questionType,
+      status: "complete",
+      confidence: 1,
+      timestamp: item.timestamp,
+      error: null,
+    };
+    set((s) => withHistory([...s.qnaCards, card]));
+  },
+
+  clearHighlight: () => set({ highlightCardId: null }),
 
   setAutoScroll: (v) => set({ autoScroll: v }),
 
@@ -97,18 +165,19 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   },
 
   clearCurrent: () =>
-    set({ interimText: "", finalText: "", translatedText: "", confidence: null }),
+    set({ interimText: "", interimTranslated: "", confidence: null }),
 
   clearSession: () =>
     set({
       interimText: "",
-      finalText: "",
-      translatedText: "",
+      interimTranslated: "",
       confidence: null,
-      questionHistory: [],
+      qnaCards: [],
+      highlightCardId: null,
       deepgramStatus: "idle",
       reconnectAttempt: 0,
       translationCache: new Map(),
       transcriptCache: new Set(),
+      questionHistory: [],
     }),
 }));

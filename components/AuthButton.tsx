@@ -1,16 +1,18 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHydrated } from "@/hooks/useHydrated";
 import { Button } from "@/components/ui/Button";
 
 export function AuthButton() {
+  const hydrated = useHydrated();
   const { user, loading, configured, signInWithGoogle, signOut } = useAuth();
 
-  if (!configured) return null;
+  if (!hydrated || !configured) return null;
 
   if (loading) {
     return (
-      <span className="text-xs text-slate-500">Đang tải...</span>
+      <span className="inline-block w-20 text-xs text-slate-500">Đang tải...</span>
     );
   }
 

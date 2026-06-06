@@ -11,6 +11,9 @@ export type AnswerLanguage = "Vietnamese" | "English" | "Same as target";
 
 export type TextSize = "Small" | "Medium" | "Large";
 
+/** Cách dịch câu hỏi interviewer → target language */
+export type TranslationProvider = "deepseek" | "google" | "none";
+
 export type QuestionType =
   | "behavioral"
   | "technical"
@@ -29,6 +32,7 @@ export interface ApiKeys {
 }
 
 export interface Settings extends ApiKeys {
+  translationProvider: TranslationProvider;
   sourceLanguage: LanguageCode;
   targetLanguage: LanguageCode;
   answerStyle: AnswerStyle;
@@ -48,6 +52,26 @@ export interface QuestionHistoryItem {
   answer: string;
   questionType: QuestionType;
   timestamp: number;
+}
+
+export type QnaCardStatus =
+  | "transcribing"
+  | "translating"
+  | "classifying"
+  | "generating"
+  | "complete"
+  | "error";
+
+export interface QnaCard {
+  id: string;
+  original: string;
+  translated: string | null;
+  answer: string | null;
+  questionType: QuestionType | null;
+  status: QnaCardStatus;
+  confidence: number;
+  timestamp: number;
+  error: string | null;
 }
 
 export interface TranscriptState {

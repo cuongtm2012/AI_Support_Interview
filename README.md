@@ -8,10 +8,10 @@ Web app hỗ trợ phỏng vấn online bằng AI — real-time STT (Deepgram), 
 - API keys (nhập trên web → localStorage):
   - **Deepgram** — bắt buộc (STT)
   - **DeepSeek** — bắt buộc (gợi ý câu trả lời)
-  - **Google Translate** — tùy chọn
+  - **Dịch câu hỏi** — mặc định **DeepSeek** (cùng key AI); hoặc Google Translate / tắt dịch
 - **Supabase** (tùy chọn — lưu session & lịch sử):
   - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (hoặc `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
   - Google OAuth enabled trong Supabase Auth
 
 ## Cài đặt
@@ -25,15 +25,11 @@ npm run dev
 
 Mở [http://localhost:3000](http://localhost:3000)
 
-## Supabase setup (SPEC v2.2)
+## Supabase setup
 
-1. Tạo project tại [supabase.com](https://supabase.com)
-2. **SQL Editor** → chạy file `supabase/migrations/001_initial.sql`
-3. **Authentication** → Providers → bật **Google**
-4. **Authentication** → URL Configuration → thêm redirect:
-   - `http://localhost:3000/auth/callback`
-   - `https://your-domain.vercel.app/auth/callback`
-5. Copy **Project URL** + **anon key** vào `.env.local`
+Project đã nối: xem [docs/SUPABASE.md](docs/SUPABASE.md) (OAuth Google, redirect URLs, MCP).
+
+Tóm tắt: `.env.local` có URL + Publishable key → bật Google provider → redirect `http://localhost:3000/auth/callback`.
 
 ## Sử dụng
 
@@ -56,7 +52,7 @@ Mở [http://localhost:3000](http://localhost:3000)
 vercel
 ```
 
-Env trên Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Env trên Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
 ## Phím tắt
 

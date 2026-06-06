@@ -43,6 +43,15 @@
     @apply w-full rounded-xl border border-white/[0.1] bg-surface-base/80 px-3.5 py-2.5 text-sm text-slate-200 transition duration-200 placeholder:text-slate-600 focus:border-accent/50 focus:ring-1 focus:ring-accent/30;
   }
 
+  .settings-input {
+    @apply !py-1.5 !text-xs;
+    min-height: 2rem;
+  }
+
+  .settings-textarea {
+    @apply !py-2.5;
+  }
+
   .select-field {
     @apply input-field cursor-pointer appearance-none bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");

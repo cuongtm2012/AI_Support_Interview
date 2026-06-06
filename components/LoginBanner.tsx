@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHydrated } from "@/hooks/useHydrated";
 import { Button } from "@/components/ui/Button";
 import { IconAlert } from "@/components/ui/Icons";
 
 export function LoginBanner() {
+  const hydrated = useHydrated();
   const { user, loading, configured, signInWithGoogle } = useAuth();
 
-  if (!configured || loading || user) return null;
+  if (!hydrated || !configured || loading || user) return null;
 
   return (
     <div className="flex shrink-0 items-center justify-between gap-4 border-b border-accent/20 bg-accent/5 px-6 py-2.5">

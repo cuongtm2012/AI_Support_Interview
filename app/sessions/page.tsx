@@ -47,7 +47,10 @@ export default function SessionsPage() {
             <p>Supabase chưa được cấu hình.</p>
             <p className="mt-2 text-sm">
               Thêm <code className="text-accent">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
-              và <code className="text-accent">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
+              và{" "}
+              <code className="text-accent">
+                NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+              </code>{" "}
               vào file env.
             </p>
             <Link href="/" className="mt-4 inline-block text-accent hover:underline">

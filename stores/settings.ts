@@ -6,6 +6,7 @@ const defaultSettings: Settings = {
   deepgramApiKey: "",
   deepseekApiKey: "",
   googleTranslateApiKey: "",
+  translationProvider: "deepseek",
   sourceLanguage: "en",
   targetLanguage: "vi",
   answerStyle: "STAR",
@@ -34,13 +35,20 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: "interview-copilot-settings",
-      version: 2,
-      migrate: (persisted) => {
-        const s = persisted as PersistedSettings;
-        if (s.openaiApiKey && !s.deepseekApiKey) {
+      version: 4,
+      migrate: (persisted, version) => {
+        const s = persisted as PersistedSettings & {
+          translationProvider?: string;
+        };
+        if (version < 2 && s.openaiApiKey && !s.deepseekApiKey) {
           s.deepseekApiKey = s.openaiApiKey;
         }
         delete s.openaiApiKey;
+        if (version < 3) {
+          s.translationProvider = s.googleTranslateApiKey?.trim()
+            ? "google"
+            : "deepseek";
+        }
         return s as Settings;
       },
     }

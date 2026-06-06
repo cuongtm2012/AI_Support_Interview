@@ -22,6 +22,8 @@ Keys lưu **localStorage** — không gửi lên server trừ khi gọi proxy (h
 
 ## 3. Supabase (lịch sử cloud)
 
+Hướng dẫn đầy đủ (OAuth, MCP, troubleshooting): [SUPABASE.md](./SUPABASE.md)
+
 1. Tạo project tại https://supabase.com
 2. SQL Editor → chạy `supabase/migrations/001_initial.sql` (project mới đã có `question_type` trong bảng `questions`)
 3. Nếu đã chạy migration cũ: chạy thêm `supabase/migrations/002_question_type.sql`
@@ -29,11 +31,12 @@ Keys lưu **localStorage** — không gửi lên server trừ khi gọi proxy (h
 5. URL Configuration → Redirect URLs:
    - `http://localhost:3000/auth/callback`
    - `https://YOUR_DOMAIN/auth/callback`
-6. `.env.local`:
+6. `.env.local` (đã có mẫu trong repo — copy từ Supabase **Connect**):
    ```
-   NEXT_PUBLIC_SUPABASE_URL=...
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
+   (Hoặc `NEXT_PUBLIC_SUPABASE_ANON_KEY` nếu dashboard hiện Anon key.)
 
 ## 4. Microphone (mic ngoài)
 
