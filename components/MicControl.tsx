@@ -7,6 +7,7 @@ import { listAudioDevices, requestMicPermission } from "@/lib/audio";
 import { hasRequiredApiKeys } from "@/lib/api-keys";
 import { startListening, stopListening, endSession } from "@/lib/pipeline";
 import { useInterviewSessionStore } from "@/stores/interview-session";
+import { presetReadiness } from "@/lib/interview-preset-utils";
 import { Button } from "@/components/ui/Button";
 import { IconMic, IconStop } from "@/components/ui/Icons";
 
@@ -14,7 +15,10 @@ export function MicControl() {
   const isListening = useTranscriptStore((s) => s.isListening);
   const questionCount = useTranscriptStore((s) => s.qnaCards.length);
   const hasSession = useInterviewSessionStore((s) => !!s.dbSessionId);
-  const { micDeviceId, profileText, setSettings } = useSettingsStore();
+  const { micDeviceId, setSettings } = useSettingsStore();
+  const activePreset = useSettingsStore((s) =>
+    s.interviewPresets.find((p) => p.id === s.activePresetId)
+  );
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +61,20 @@ export function MicControl() {
       return;
     }
 
+    if (activePreset && !presetReadiness(activePreset).ok) {
+      const { missing: presetMissing } = presetReadiness(activePreset);
+      const labels =
+        presetMissing.length === 2
+          ? "Profile/JD"
+          : presetMissing[0] === "profile"
+            ? "Profile"
+            : "JD";
+      setError(
+        `Bộ "${activePreset.name}" thiếu ${labels} — mở Settings → Profile`
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       await startListening();
@@ -68,9 +86,8 @@ export function MicControl() {
     }
   };
 
-  const profileLabel = profileText
-    ? profileText.slice(0, 48).replace(/\n/g, " ") + (profileText.length > 48 ? "…" : "")
-    : "Chưa có profile";
+  const presetName = activePreset?.name ?? "Chưa chọn bộ";
+  const presetReady = activePreset ? presetReadiness(activePreset).ok : false;
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -118,8 +135,11 @@ export function MicControl() {
       <div className="hidden h-8 w-px bg-white/10 sm:block" aria-hidden />
 
       <p className="text-sm text-slate-500">
-        <span className="text-slate-600">Profile: </span>
-        <span className="text-slate-400">{profileLabel}</span>
+        <span className="text-slate-600">Bộ: </span>
+        <span className={presetReady ? "text-slate-400" : "text-amber-400/90"}>
+          {presetName}
+          {!presetReady ? " ⚠" : ""}
+        </span>
       </p>
 
       {error && (

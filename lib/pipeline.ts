@@ -30,14 +30,26 @@ import {
   type PipelineState,
 } from "@/lib/pipeline-state";
 import {
+  extractPrimaryQuestion,
+  isLectureMonologue,
+  isLikelyInterviewQuestion,
+} from "@/lib/question-extract";
+import {
+  endsWithQuestion,
+  endsWithSentence,
+  isContinuationFragment,
   mergeTranscriptFragments,
   wordCount,
 } from "@/lib/transcript-merge";
 
-/** Wait this long after last segment before flushing one Q&A card. */
-const MERGE_IDLE_MS = 2800;
-/** Force flush if accumulated text exceeds this (long monologue). */
-const MAX_CARD_WORDS = 100;
+/** Pause before checking whether to finalize a card (lecture/video friendly). */
+const MERGE_IDLE_MS = 8000;
+/** Shorter wait after a clear question ending with "?". */
+const MERGE_IDLE_QUESTION_MS = 5500;
+/** Force flush after this much silence even if mid-sentence. */
+const MERGE_FORCE_FLUSH_MS = 18000;
+const MIN_FLUSH_WORDS = 12;
+const MAX_CARD_WORDS = 180;
 
 function stopAudioOnly(state: PipelineState): void {
   state.audioCapture?.stop();
@@ -89,17 +101,53 @@ async function translateForCard(
 async function processQnaCard(
   state: PipelineState,
   cardId: string,
-  text: string,
+  rawTranscript: string,
   confidence: number
 ): Promise<void> {
   const settings = useSettingsStore.getState();
   const store = useTranscriptStore.getState();
-  const key = hashTranscriptKey(text);
+  const trimmedRaw = rawTranscript.trim();
 
-  if (store.hasTranscript(key)) return;
-  store.markTranscript(key);
+  const extracted = extractPrimaryQuestion(trimmedRaw);
+  const shouldAnswer =
+    extracted !== null &&
+    isLikelyInterviewQuestion(trimmedRaw) &&
+    !isLectureMonologue(trimmedRaw);
 
-  const translatedPromise = translateForCard(cardId, text, key);
+  const displayText = extracted ?? trimmedRaw;
+  store.updateQnaCard(cardId, { original: displayText });
+
+  const cacheKey = hashTranscriptKey(displayText);
+  if (store.hasTranscript(cacheKey)) return;
+  store.markTranscript(cacheKey);
+
+  const translatedPromise = translateForCard(cardId, displayText, cacheKey);
+
+  if (!shouldAnswer) {
+    const translated = await translatedPromise;
+    store.updateQnaCard(cardId, {
+      status: "complete",
+      questionType: null,
+      answer: null,
+    });
+
+    const sessionId = useInterviewSessionStore.getState().dbSessionId;
+    if (sessionId) {
+      void saveQuestionToSession({
+        sessionId,
+        transcriptRaw: displayText,
+        transcriptTranslated: translated ?? "",
+        aiAnswer: "",
+        questionType: "behavioral",
+        answerLanguage: settings.answerLanguage,
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+      });
+    }
+    return;
+  }
+
+  const questionText = extracted!;
 
   if (confidence < settings.confidenceThreshold || !hasDeepseekApiKey()) {
     const translated = await translatedPromise;
@@ -109,11 +157,12 @@ async function processQnaCard(
     if (sessionId) {
       void saveQuestionToSession({
         sessionId,
-        transcriptRaw: text,
+        transcriptRaw: questionText,
         transcriptTranslated: translated ?? "",
         aiAnswer: "",
         questionType: "behavioral",
         answerLanguage: settings.answerLanguage,
+        sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
       });
     }
@@ -129,7 +178,7 @@ async function processQnaCard(
     error: null,
   });
 
-  const questionType = (await classifyQuestion(text)).type;
+  const questionType = (await classifyQuestion(questionText)).type;
   store.updateQnaCard(cardId, {
     questionType,
     status: "generating",
@@ -138,12 +187,13 @@ async function processQnaCard(
 
   try {
     await generateAnswerStreaming({
-      question: text,
+      question: questionText,
       questionType,
       profileText: settings.profileText,
       jdText: settings.jdText,
       answerStyle: settings.answerStyle,
       answerLanguage: settings.answerLanguage,
+      sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       signal: state.answerAbort.signal,
       onChunk: (chunk) =>
@@ -161,11 +211,12 @@ async function processQnaCard(
     if (sessionId && finalCard) {
       void saveQuestionToSession({
         sessionId,
-        transcriptRaw: text,
+        transcriptRaw: questionText,
         transcriptTranslated: translated ?? "",
         aiAnswer: finalCard.answer ?? "",
         questionType,
         answerLanguage: settings.answerLanguage,
+        sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
       });
     }
@@ -201,11 +252,70 @@ function flushMergeBuffer(state: PipelineState, confidence: number): void {
 }
 
 function scheduleMergeFlush(state: PipelineState): void {
+  if (!state.mergeCardId) return;
   cancelMergeDebounce(state);
+
+  const fullText = mergeTranscriptFragments(state.mergeBufferAcc);
+  const delay = endsWithQuestion(fullText)
+    ? MERGE_IDLE_QUESTION_MS
+    : MERGE_IDLE_MS;
+
   state.mergeDebounceTimer = setTimeout(() => {
     state.mergeDebounceTimer = null;
+    tryFlushMergeBuffer(state);
+  }, delay);
+}
+
+function tryFlushMergeBuffer(state: PipelineState): void {
+  if (!state.mergeCardId || state.mergeBufferAcc.length === 0) return;
+
+  const fullText = mergeTranscriptFragments(state.mergeBufferAcc);
+  const words = wordCount(fullText);
+  const idleMs = Date.now() - state.lastSegmentAt;
+  const lastSeg = state.mergeBufferAcc[state.mergeBufferAcc.length - 1] ?? "";
+
+  if (words >= MAX_CARD_WORDS) {
     flushMergeBuffer(state, state.lastSegmentConfidence);
-  }, MERGE_IDLE_MS);
+    return;
+  }
+
+  if (extractPrimaryQuestion(fullText) && idleMs >= MERGE_IDLE_QUESTION_MS) {
+    flushMergeBuffer(state, state.lastSegmentConfidence);
+    return;
+  }
+
+  // Clear standalone question — finalize after shorter pause
+  if (endsWithQuestion(fullText) && words >= 6 && idleMs >= MERGE_IDLE_QUESTION_MS) {
+    flushMergeBuffer(state, state.lastSegmentConfidence);
+    return;
+  }
+
+  // Complete sentence with enough context
+  if (
+    endsWithSentence(fullText) &&
+    words >= MIN_FLUSH_WORDS &&
+    idleMs >= MERGE_IDLE_MS
+  ) {
+    flushMergeBuffer(state, state.lastSegmentConfidence);
+    return;
+  }
+
+  // Mid-sentence fragment — keep accumulating through short pauses in video/lecture
+  if (isContinuationFragment(lastSeg) && idleMs < MERGE_FORCE_FLUSH_MS) {
+    scheduleMergeFlush(state);
+    return;
+  }
+
+  if (!endsWithSentence(fullText) && idleMs < MERGE_FORCE_FLUSH_MS) {
+    scheduleMergeFlush(state);
+    return;
+  }
+
+  if (idleMs >= MERGE_FORCE_FLUSH_MS && words >= 5) {
+    flushMergeBuffer(state, state.lastSegmentConfidence);
+  } else {
+    scheduleMergeFlush(state);
+  }
 }
 
 function appendFinalSegment(
@@ -222,6 +332,7 @@ function appendFinalSegment(
   if (state.seenSegmentKeys.has(key)) return;
   state.seenSegmentKeys.add(key);
   state.lastSegmentConfidence = confidence;
+  state.lastSegmentAt = Date.now();
 
   const store = useTranscriptStore.getState();
   state.mergeBufferAcc.push(trimmed);
@@ -245,7 +356,8 @@ function appendFinalSegment(
 }
 
 function onUtteranceEnd(state: PipelineState): void {
-  flushMergeBuffer(state, state.lastSegmentConfidence);
+  // Deepgram detected a short pause — re-check flush criteria, do not finalize immediately
+  scheduleMergeFlush(state);
 }
 
 async function connectDeepgram(state: PipelineState): Promise<void> {

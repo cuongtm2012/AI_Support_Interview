@@ -4,6 +4,7 @@ import type {
   LanguageCode,
   QuestionType,
 } from "@/types";
+import { resolveAnswerLanguageLabel } from "@/lib/answer-language";
 import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
 
 export interface GenerateAnswerParams {
@@ -13,18 +14,10 @@ export interface GenerateAnswerParams {
   jdText: string;
   answerStyle: AnswerStyle;
   answerLanguage: AnswerLanguage;
+  sourceLanguage: LanguageCode;
   targetLanguage: LanguageCode;
   onChunk: (text: string) => void;
   signal?: AbortSignal;
-}
-
-function resolveAnswerLang(
-  answerLanguage: AnswerLanguage,
-  targetLanguage: LanguageCode
-): string {
-  if (answerLanguage === "Vietnamese") return "tiếng Việt";
-  if (answerLanguage === "English") return "tiếng Anh";
-  return targetLanguage === "vi" ? "tiếng Việt" : "tiếng Anh";
 }
 
 export async function generateAnswerStreaming(
@@ -35,8 +28,9 @@ export async function generateAnswerStreaming(
     throw new Error("DeepSeek API key chưa được cấu hình (Settings → API Keys)");
   }
 
-  const lang = resolveAnswerLang(
+  const lang = resolveAnswerLanguageLabel(
     params.answerLanguage,
+    params.sourceLanguage,
     params.targetLanguage
   );
 

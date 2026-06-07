@@ -11,6 +11,7 @@ export interface PipelineState {
   mergeCardId: string | null;
   mergeDebounceTimer: ReturnType<typeof setTimeout> | null;
   lastSegmentConfidence: number;
+  lastSegmentAt: number;
   seenSegmentKeys: Set<string>;
 }
 
@@ -37,6 +38,7 @@ function createEmptyState(tabId: string): PipelineState {
     mergeCardId: null,
     mergeDebounceTimer: null,
     lastSegmentConfidence: 1,
+    lastSegmentAt: 0,
     seenSegmentKeys: new Set(),
   };
 }
@@ -72,6 +74,7 @@ export function clearMergeState(state: PipelineState): void {
   state.mergeCardId = null;
   state.seenSegmentKeys.clear();
   state.lastSegmentConfidence = 1;
+  state.lastSegmentAt = 0;
 }
 
 export function hashTranscriptKey(text: string): string {

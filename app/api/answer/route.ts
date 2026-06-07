@@ -45,13 +45,16 @@ export async function POST(req: NextRequest) {
     profileText = "",
     jdText = "",
     answerStyle = "STAR",
-    answerLanguage = "tiếng Anh",
+    answerLanguage = "English",
   } = body;
 
   const questionType: QuestionType = isQuestionType(rawType)
     ? rawType
     : "behavioral";
   const typeGuidance = answerGuidanceForType(questionType);
+  const answerInEnglish =
+    answerLanguage.toLowerCase().includes("english") ||
+    answerLanguage.toLowerCase().includes("anh");
 
   if (!question?.trim()) {
     return new Response(JSON.stringify({ error: "Question is required" }), {
@@ -60,23 +63,51 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const systemPrompt = `Bạn là trợ lý phỏng vấn chuyên nghiệp. Viết câu trả lời dựa trên hồ sơ ứng viên và JD.
-Loại câu hỏi: ${questionType}. ${typeGuidance}
-Format ưu tiên: ${answerStyle}. Ngôn ngữ trả lời: ${answerLanguage}.
-Trả lời súc tích, thực tế, bám sát profile. Không giải thích meta — chỉ đưa câu trả lời.`;
+  const systemPrompt = answerInEnglish
+    ? `You are an expert interview coach. Write ONLY the job candidate's spoken answer in English.
+Question type: ${questionType}. ${typeGuidance}
+Preferred format: ${answerStyle}. Answer language: English.
 
-  const userPrompt = `Câu hỏi từ interviewer:
+Rules (strict):
+- First person, speaking TO the interviewer (never thank the interviewer for explaining)
+- No meta text, no apologies about missing profile/JD, no "based on your question"
+- Concise, practical; use profile/JD when provided, else brief professional examples
+- Output ONLY the answer — no preamble or notes`
+    : `Bạn là chuyên gia coaching phỏng vấn. Chỉ viết câu trả lời của ỨNG VIÊN bằng tiếng Việt.
+Loại câu hỏi: ${questionType}. ${typeGuidance}
+Format: ${answerStyle}. Ngôn ngữ: tiếng Việt.
+
+Quy tắc (bắt buộc):
+- Ngôi thứ nhất, ứng viên trả lời interviewer (không cảm ơn interviewer vì đã giải thích)
+- Không meta, không xin lỗi thiếu profile/JD, không "dựa trên câu hỏi"
+- Súc tích, thực tế; dùng profile/JD nếu có, không thì ví dụ chung
+- Chỉ output câu trả lời — không mở đầu hay ghi chú`;
+
+  const userPrompt = answerInEnglish
+    ? `Interviewer question:
 "${question}"
 
-Loại câu hỏi: ${questionType}
+Question type: ${questionType}
+
+Candidate profile:
+${profileText || "(not provided — use concise generic professional examples, do not mention missing profile)"}
+
+Job description:
+${jdText || "(not provided)"}
+
+Write the candidate's answer (${typeGuidance}):`
+    : `Câu hỏi interviewer:
+"${question}"
+
+Loại: ${questionType}
 
 Hồ sơ ứng viên:
-${profileText || "(chưa có profile)"}
+${profileText || "(chưa có — dùng ví dụ chung, không nhắc thiếu profile)"}
 
-Job Description:
-${jdText || "(chưa có JD)"}
+JD:
+${jdText || "(chưa có)"}
 
-Viết câu trả lời (${typeGuidance}):`;
+Viết câu trả lời ứng viên (${typeGuidance}):`;
 
   const llmRes = await fetch(DEEPSEEK_API_URL, {
     method: "POST",

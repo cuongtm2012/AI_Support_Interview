@@ -1,15 +1,7 @@
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { InterviewSession, SessionQuestion, SessionWithQuestions } from "@/types/database";
 import type { AnswerLanguage, LanguageCode, QuestionType } from "@/types";
-
-function resolveAnswerLangCode(
-  answerLanguage: AnswerLanguage,
-  targetLanguage: LanguageCode
-): string {
-  if (answerLanguage === "Vietnamese") return "vi";
-  if (answerLanguage === "English") return "en";
-  return targetLanguage;
-}
+import { resolveAnswerLangCode } from "@/lib/answer-language";
 
 export async function getCurrentUserId(): Promise<string | null> {
   if (!isSupabaseConfigured()) return null;
@@ -78,6 +70,7 @@ export async function saveQuestionToSession(params: {
   aiAnswer: string;
   questionType: QuestionType;
   answerLanguage: AnswerLanguage;
+  sourceLanguage: LanguageCode;
   targetLanguage: LanguageCode;
 }): Promise<void> {
   if (!isSupabaseConfigured() || !params.sessionId) return;
@@ -91,6 +84,7 @@ export async function saveQuestionToSession(params: {
     ai_answer: params.aiAnswer,
     answer_lang: resolveAnswerLangCode(
       params.answerLanguage,
+      params.sourceLanguage,
       params.targetLanguage
     ),
   });

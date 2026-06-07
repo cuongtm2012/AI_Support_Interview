@@ -7,7 +7,11 @@ export type AnswerStyle =
   | "Concise"
   | "Technical";
 
-export type AnswerLanguage = "Vietnamese" | "English" | "Same as target";
+export type AnswerLanguage =
+  | "Vietnamese"
+  | "English"
+  | "Same as target"
+  | "Same as source";
 
 export type TextSize = "Small" | "Medium" | "Large";
 
@@ -31,6 +35,16 @@ export interface ApiKeys {
   googleTranslateApiKey: string;
 }
 
+export interface InterviewPreset {
+  id: string;
+  name: string;
+  profileText: string;
+  jdText: string;
+  analysis: string | null;
+  analyzedAt: number | null;
+  updatedAt: number;
+}
+
 export interface Settings extends ApiKeys {
   translationProvider: TranslationProvider;
   sourceLanguage: LanguageCode;
@@ -38,8 +52,11 @@ export interface Settings extends ApiKeys {
   answerStyle: AnswerStyle;
   answerLanguage: AnswerLanguage;
   micDeviceId: string;
+  /** Denormalized from active preset — used by pipeline & AI */
   profileText: string;
   jdText: string;
+  interviewPresets: InterviewPreset[];
+  activePresetId: string;
   confidenceThreshold: number;
   textSize: TextSize;
   darkMode: boolean;

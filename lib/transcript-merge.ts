@@ -32,3 +32,18 @@ function suffixPrefixOverlap(a: string, b: string): number {
 export function wordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
+
+export function endsWithQuestion(text: string): boolean {
+  return /\?\s*$/.test(text.trim());
+}
+
+export function endsWithSentence(text: string): boolean {
+  return /[.!?]\s*$/.test(text.trim());
+}
+
+/** Fragment likely continues previous speech (mid-sentence). */
+export function isContinuationFragment(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return /^[a-z("'‘]/.test(t) || /^,(\s|$)/.test(t);
+}

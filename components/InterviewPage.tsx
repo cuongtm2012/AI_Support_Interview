@@ -9,6 +9,7 @@ import { MicControl } from "@/components/MicControl";
 import { SettingsModal } from "@/components/SettingsModal";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ApiKeyBanner } from "@/components/ApiKeyBanner";
+import { ProfilePresetBanner } from "@/components/ProfilePresetBanner";
 import { LoginBanner } from "@/components/LoginBanner";
 import { AuthErrorBanner } from "@/components/AuthErrorBanner";
 import { AuthButton } from "@/components/AuthButton";
@@ -26,8 +27,16 @@ import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 
 export function InterviewPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<
+    "keys" | "interview" | "profile" | "display"
+  >("keys");
   const interviewStatus = useInterviewStatus();
   const hasMeeting = useMeetingStreamStore((s) => !!s.stream);
+
+  const openSettings = (tab?: "keys" | "interview" | "profile" | "display") => {
+    if (tab) setSettingsTab(tab);
+    setSettingsOpen(true);
+  };
 
   useSessionRealtime();
 
@@ -81,7 +90,7 @@ export function InterviewPage() {
           <Button
             variant="ghost"
             icon={<IconSettings size={16} />}
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => openSettings()}
             className="!px-3"
             aria-label="Open settings"
           >
@@ -92,7 +101,8 @@ export function InterviewPage() {
 
       <AuthErrorBanner />
       <LoginBanner />
-      <ApiKeyBanner onOpenSettings={() => setSettingsOpen(true)} />
+      <ApiKeyBanner onOpenSettings={() => openSettings("keys")} />
+      <ProfilePresetBanner onOpenSettings={() => openSettings("profile")} />
 
       <main className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:flex-row">
         <aside
@@ -128,6 +138,7 @@ export function InterviewPage() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
       />
 
       <RecapScreen />

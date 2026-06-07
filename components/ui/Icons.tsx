@@ -126,3 +126,19 @@ export function IconCheck({ size = defaults.size, className, ...p }: IconProps) 
     </svg>
   );
 }
+
+export function IconMaximize({ size = defaults.size, className, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={defaults.strokeWidth} className={className} aria-hidden {...p}>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconMinimize({ size = defaults.size, className, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={defaults.strokeWidth} className={className} aria-hidden {...p}>
+      <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
