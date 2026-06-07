@@ -1,6 +1,8 @@
-# Interview Copilot — PRD & Technical Specification v3.0
+# Interview Copilot — PRD & Technical Specification v4.1
 
-> **Web app hỗ trợ phỏng vấn online bằng AI** — full màn hình, capture tab cuộc gọi (system audio), real-time STT + dịch tùy chọn + gợi ý câu trả lời theo loại câu hỏi.
+> **Web app hỗ trợ phỏng vấn online bằng AI** — full màn hình, capture tab cuộc gọi (system audio), real-time STT + dịch tùy chọn + gợi ý câu trả lời theo loại câu hỏi. Hỗ trợ **nhiều bộ Profile + JD** (presets), upload CV/JD, và phân tích AI trước buổi phỏng vấn.
+
+**Source of truth:** commit `60751a6` trên branch `main`.
 
 ---
 
@@ -9,7 +11,9 @@
 - [ ] Web app full màn hình — dễ đọc transcript, bản dịch và câu trả lời AI
 - [ ] Capture tab YouTube/Meet/Teams bằng Screen Capture API (getDisplayMedia) — lấy cả audio hệ thống, không cần mic ngoài
 - [ ] Capture âm thanh từ microphone làm fallback → Deepgram Nova-3 STT real-time → dịch En↔Vi
-- [ ] Upload profile ngắn + JD → AI gợi ý câu trả lời chuẩn context
+- [x] Upload profile + JD — paste, **upload PDF/DOCX/TXT/MD**, hoặc nhiều **preset** (mỗi buổi PV một bộ)
+- [x] **Phân tích Profile ↔ JD** (DeepSeek) trước buổi phỏng vấn — match, gap, câu hỏi dự đoán
+- [x] **Bắt buộc** Profile + JD đủ trước khi Start Listening (tránh nhầm bộ / quên nhập)
 - [ ] Chạy trên browser (macOS + Windows), không cần cài đặt
 - [ ] Auth + lưu lịch sử phỏng vấn qua Supabase (Google login)
 - [ ] PWA — install như app desktop
@@ -20,7 +24,7 @@
 - [ ] KHÔNG can thiệp vào Zoom/Meet/Teams (chỉ capture tab audio)
 - [ ] KHÔNG ghi âm/lưu trữ raw audio — chỉ transcript + answer
 - [ ] KHÔNG làm tính năng luyện tập / mock interview
-- [ ] KHÔNG làm Chrome Extension ở phase này
+- [ ] Chrome Extension **không phải luồng chính** — có MVP stub (`extension/`) nhưng web app vẫn dùng Share tab audio thủ công
 
 ---
 
@@ -29,11 +33,12 @@
 ### UC1: Phỏng vấn với người Mỹ (English → Vietnamese)
 
 1. Mở app trên browser trước buổi phỏng vấn
-2. Settings: Source = English, Target = Vietnamese
-3. Nhập API keys (Deepgram bắt buộc, DeepSeek tùy chọn cho AI answer)
-4. Optional: paste profile + JD
-5. Optional: bấm "Chọn tab" → chọn tab cuộc gọi → bật "Share tab audio" → capture cả system audio
-6. Bấm "Start Listening" → app tạo Supabase session + kết nối Deepgram WebSocket
+2. Settings → **Profile & JD**: chọn hoặc tạo preset (vd: "AWS SAA"), paste/upload Profile + JD
+3. Bấm **Phân tích** (cần DeepSeek key) → xem match/gap/câu hỏi dự đoán
+4. Settings → Keys: Deepgram (bắt buộc), DeepSeek (AI answer + phân tích)
+5. Settings → Interview: Source = English, Target = Vietnamese, Answer lang = **Same as source**
+6. Optional: bấm "Chọn tab" → chọn tab cuộc gọi → bật "Share tab audio"
+7. Bấm "Start Listening" (chặn nếu thiếu Profile/JD hoặc Deepgram key) → Supabase session + Deepgram WS
 7. Interviewer hỏi → app real-time hiện:
    - **[Transcript]** "Tell me about a time you handled a difficult situation"
    - **[Dịch]** "Hãy kể về một lần bạn xử lý tình huống khó khăn" (chọn dịch DeepSeek hoặc Google)
@@ -122,34 +127,60 @@
 
 ## 5. Settings Panel (⚙️)
 
-### Tab: Keys — API Keys (localStorage)
+Modal full-screen capable: **sidebar nav** (desktop) + tab strip (mobile), nút **Phóng to / Thu nhỏ**, footer trạng thái theo tab. Mặc định mở tab **Profile & JD** khi đã có Deepgram key.
+
+### Tab: API Keys — localStorage (Zustand persist v6)
 
 | Setting | Required | Notes |
 |---------|----------|-------|
 | Deepgram API Key | ✅ Bắt buộc | Cho STT real-time (Nova-3) |
-| DeepSeek API Key | ❌ Tùy chọn | Cho AI answer + dịch (mặc định) |
+| DeepSeek API Key | ❌ Tùy chọn | Cho AI answer + dịch (mặc định) + **Phân tích Profile↔JD** |
 
-DeepSeek key vừa dùng cho AI answer vừa dùng cho translation mặc định.
-Google Translate key: chỉ hiện khi user chọn "Google" trong Translation Provider.
+DeepSeek key vừa dùng cho AI answer, translation mặc định, và phân tích preset.
+Google Translate key: chỉ hiện khi user chọn `google` trong Translation Provider.
+
+### Tab: Profile & JD — Interview Presets ★ (v4.1)
+
+| Feature | Notes |
+|---------|-------|
+| **Interview Presets** | Nhiều bộ `{ name, profileText, jdText, analysis, analyzedAt }` — mỗi buổi PV một bộ |
+| Preset selector | Chip/pill chọn bộ; **+ Mới**, **Xóa**, đổi tên inline |
+| Workflow steps | Chọn bộ → Profile → JD → Phân tích (badge OK/Trống từng ô) |
+| Profile / JD | 2 cột (desktop); textarea + **Upload PDF / DOCX / TXT / MD** |
+| **Phân tích** | `POST /api/analyze-profile` — match, điểm mạnh, gap, câu hỏi dự đoán, STAR (tiếng Việt) |
+| Readiness gate | `presetReadiness()` — thiếu Profile hoặc JD → banner + **MicControl chặn Start** |
+| Maximize modal | Full viewport — textarea + kết quả phân tích cao hơn |
+
+Denormalized: `settings.profileText` / `settings.jdText` luôn sync với **active preset** — pipeline & AI đọc từ đây.
+
+**Type `InterviewPreset`** (`types/index.ts`):
+
+```typescript
+interface InterviewPreset {
+  id: string;
+  name: string;
+  profileText: string;
+  jdText: string;
+  analysis: string | null;
+  analyzedAt: number | null;
+  updatedAt: number;
+}
+```
+
+Zustand persist **version 6**: migrate từ single profile/jd → `interviewPresets[]` + `activePresetId`.
+
+External fallback: [doctomd.com](https://doctomd.com) cho convert phức tạp.
 
 ### Tab: Interview — Language & Style
 
 | Setting | Options | Default | Notes |
 |---------|---------|---------|-------|
 | Translation Provider | none / deepseek / google | deepseek | Mặc định DeepSeek (dùng chung key AI) |
-| Source Language | En, Vi | English | Ngôn ngữ interviewer nói |
+| Source Language | En, Vi | English | Ngôn ngữ interviewer nói (STT) |
 | Target Language | Vi, En | Vietnamese | Ngôn ngữ dịch sang |
 | Answer Style | STAR, Professional, Casual, Concise, Technical | STAR | Format câu trả lời AI |
-| Answer Language | Vietnamese, English, Same as target | Same as target | Ngôn ngữ gợi ý trả lời |
-| Confidence Threshold | 0.5 - 1.0 | 0.70 | Lọc final transcript theo độ tin cậy |
-
-### Tab: Profile — Profile & JD
-
-| Setting | Notes |
-|---------|-------|
-| Profile Text | Textarea (3-5 câu: kinh nghiệm, skills, role) |
-| JD Text | Textarea (paste JD) |
-| DOC/PDF → MD | Tool external: doctomd.com, lightpdf.com/pdf-to-markdown |
+| Answer Language | Vietnamese, English, Same as target, **Same as source** | **Same as source** | Ngôn ngữ gợi ý trả lời — mặc định theo STT lang |
+| Confidence Threshold | 0.5 - 1.0 | 0.70 | Lọc final transcript trước khi gen AI answer |
 
 ### Tab: Display
 
@@ -233,32 +264,34 @@ API Key Flow:
 ```
 1. SETUP PHASE
    - Mở app trên browser
-   - Settings: nhập Deepgram key (bắt buộc) + DeepSeek key (tùy chọn)
-   - Chọn En→Vi (hoặc ngược lại), style STAR
-   - Paste profile (3-5 câu) + JD (nếu có)
+   - Settings → Profile & JD: chọn/tạo preset, paste hoặc upload Profile + JD
+   - Optional: Phân tích Profile↔JD (DeepSeek)
+   - Settings → Keys: Deepgram (bắt buộc), DeepSeek (AI + dịch + phân tích)
+   - Settings → Interview: ngôn ngữ, style, answer lang (default Same as source)
    - Optional: chọn tab cuộc gọi → bật Share tab audio
-   - Bấm "Start Listening"
+   - Bấm "Start Listening" (gate: keys OK + preset có đủ profile & jd)
 
 2. AUDIO CAPTURE
    - Kiểm tra meeting stream có audio không
      - Có → createAudioCaptureFromStream (system audio từ tab)
      - Không → getUserMedia({ audio: { deviceId } }) (mic)
    - PCM 16kHz mono, chunk 4096 samples
-   - ScriptProcessorNode (không AudioWorklet — browser compatibility)
+   - **AudioWorklet** (`pcm-processor`) ưu tiên; fallback **ScriptProcessorNode** nếu Worklet fail
+   - `audioContext.resume()` khi browser suspend context
    - Echo cancellation OFF (cần clear voice)
 
 3. STT (Deepgram WebSocket)
    - fetch /api/deepgram-token → nhận temporary token
    - WebSocket wss://api.deepgram.com/v1/listen?model=nova-3&language=...
-  - Stream audio chunks → nhận interim + final transcript
-  - Interim: hiện text đang nhận dạng (mờ dần)
-  - Final: text chính xác (in đậm) → trigger dịch + classify + AI answer
-  - Deepgram params tuning:
-    - `endpointing: "800"` — 800ms silence để quyết định end-of-utterance (từ 300ms)
-    - `utterance_end_ms: "1200"` — utterance-level detection, gom các final transcript
-    - `vad_turnoff: "800"` — thời gian VAD detect silence
-  - Auto reconnect: 5 lần retry, exponential backoff (1s base)
-  - keepAliveInterval mỗi 10s → ping WebSocket
+   - Stream audio chunks → nhận interim + final transcript
+   - Interim: hiện text đang nhận dạng (bottom bar) + interim translation
+   - Final segments → **merge buffer** (debounced), không flush ngay từng segment
+   - Deepgram params tuning (lecture/video friendly):
+     - `endpointing: "2200"` — chờ lâu hơn trước end-of-phrase
+     - `utterance_end_ms: "4500"` — utterance-level pause
+     - `vad_events: "true"` — VAD events cho client logic
+   - Auto reconnect: 5 lần retry, exponential backoff (1s base)
+   - keepAliveInterval mỗi 10s → ping WebSocket
 
 4. TRANSLATION (tùy chọn, background)
    - Khi có final transcript → gọi translate API
@@ -269,45 +302,37 @@ API Key Flow:
    - Bỏ qua nếu source === target hoặc provider === "none"
    - Không chặn pipeline — chạy background song song với classify
 
-5. QUESTION TYPE DETECTION  ★ (bước mới v2.4)
-   - Khi có final transcript, phân loại câu hỏi trước khi gen answer:
-     - behavioral → STAR (kể về, describe a time, give me an example)
-     - technical → giải thích + ví dụ (explain, how does, difference between)
-     - situational → approach + giải pháp (how would you, what would you do if)
-     - competency → liệt kê kinh nghiệm (liên quan JD)
-   - Cơ chế fallback 2 lớp:
-     Lớp 1: heuristicClassify() — regex-based, không cần API, chạy ngay
-     Lớp 2: DeepSeek 1-shot classify (nếu có key) → format hint + type
-   - Fallback: nếu DeepSeek lỗi → dùng kết quả heuristic
-   - Output: { type, formatHint } → truyền vào prompt bước 6
-   - UI hiển thị QuestionTypeBadge ngay khi classify xong (kèm status "Classifying…")
+5. QUESTION EXTRACTION & FILTER  ★ (v4.1)
+   - Trước classify/answer, gom merge buffer → `extractPrimaryQuestion()`:
+     - Regex tìm câu có `?` + question starter (what/how/tell me about/…)
+     - Loại lecture/promo noise (`isLectureMonologue()` — YouTube, "never give up", v.v.)
+   - **Không phải câu hỏi PV** → chỉ dịch (nếu bật), lưu transcript, **skip AI answer**
+   - **Là câu hỏi PV** → tiếp classify + gen answer
+   - Heuristic + DeepSeek classify (behavioral/technical/situational/competency) — giữ nguyên v2.4
 
 6. AI ANSWER (DeepSeek API) — tùy chọn
-   - Auto trigger ngay khi có final transcript (không cần click)
-   - Skip nếu không có DeepSeek key
-   - Skip nếu confidence < threshold
+   - Auto trigger sau question extract (không cần click)
+   - Skip nếu không có DeepSeek key, confidence < threshold, hoặc không extract được câu hỏi
    - Dedup: hash text → trùng thì bỏ
    - Abort controller: câu hỏi mới → abort câu cũ đang gen
+   - Answer language: `resolveAnswerLanguageLabel()` — **Same as source** = ngôn ngữ STT
+   - Prompt hardening: trả lời bằng ngôn ngữ đích, giọng ứng viên (first person), bám profile + JD
    - Context prompt:
      ```
      Bạn là assistant phỏng vấn. Dựa trên:
-     - Câu hỏi: [transcript gốc]
+     - Câu hỏi: [extracted question]
      - Loại câu hỏi: [behavioral | technical | situational | competency]
-     - Hồ sơ ứng viên: [profile text]
-     - JD: [job description text]
+     - Hồ sơ ứng viên: [profile text — active preset]
+     - JD: [job description — active preset]
 
      Viết câu trả lời bằng [ngôn ngữ], format [style].
-     Loại behavioral → format STAR
-     Loại technical → giải thích ngắn gọn + ví dụ thực tế
-     Loại situational → approach + giải pháp từng bước
-     Loại competency → liệt kê kinh nghiệm liên quan JD
      Answer:
      ```
    - Streaming SSE: fetch POST /api/answer → ReadableStream
    - DeepSeek model: deepseek-chat, temp 0.7, max_tokens 1500
-   - Khi answer xong → lưu vào transcript history + lưu Supabase (nếu có session)
+   - Khi answer xong → await translation → lưu Supabase (nếu có session)
 
-7. POST-INTERVIEW SUMMARY  ★ (bước mới v2.4)
+7. POST-INTERVIEW SUMMARY  ★ (v2.4, unchanged)
    - "End Session" button → stop audio + đóng Supabase session (status = "ended")
    - RecapScreen hiển thị toàn màn hình:
      - Thời gian bắt đầu/kết thúc, duration
@@ -320,21 +345,24 @@ API Key Flow:
    - Supabase lưu: sessions (profile, JD, lang, style) + questions (từng câu hỏi)
 ```
 
-### Q&A Card Flow (v3.0 — with Fragment Merge)
+### Q&A Card Flow (v4.1 — Debounced Merge + Question Extract)
 
-Khi final transcript đến từ Deepgram:
+Khi **final segment** đến từ Deepgram:
 
-1. Final text kiểm tra: **ngắn (≤4 từ) + không phải đầu câu mới** → gom vào **merge buffer** của card hiện tại (không tạo card mới)
-2. Merge buffer flush khi:
-   - Đã gom đủ **5 fragments** → trigger processQnaCard với text hoàn chỉnh
-   - Final text mới là **đầu câu mới** (chữ hoa) → flush buffer cũ, tạo card mới
-   - **End Session** → flush buffer còn lại
-3. Khi process được trigger:
-   - Card state: `{ status: "transcribing", original: mergedText }`
-   - **translateInBackground** chạy song song → update card: `translated: "..."`
-   - **classify + generateAnswer** chạy → update card: `answer: "...", status: "complete"`
-4. Auto-scroll đến card mới nhất
-5. Bottom bar interim vẫn chạy độc lập, không ảnh hưởng đến cards
+1. Segment append vào **merge buffer** của card hiện tại (`mergeTranscriptFragments` — overlap-aware)
+2. **Không** flush ngay — schedule debounce:
+   - Idle **8s** (bài giảng / câu dài) hoặc **5.5s** sau câu kết thúc `?`
+   - Force flush sau **18s** silence hoặc **≥180 từ**
+   - Min **12 từ** trước khi flush (tránh card rác)
+3. `UtteranceEnd` / VAD: reschedule debounce, **không** flush ngay lập tức
+4. Khi flush → `processQnaCard()`:
+   - `extractPrimaryQuestion()` → hiển thị câu hỏi đã extract (hoặc full text)
+   - Monologue / không phải câu hỏi → translate only, status `complete`, no answer
+   - Câu hỏi PV → classify → stream answer; **await translation** trước save Supabase
+5. Auto-scroll đến card mới nhất
+6. Bottom bar interim chạy độc lập
+
+**Pipeline state:** per-tab isolation qua `lib/pipeline-state.ts` (`global.__icPipelineStates`)
 
 ### Session States
 
@@ -436,8 +464,10 @@ create policy "Users can insert own questions"
 
 | Dữ liệu | Lưu ở đâu | Lý do |
 |---------|-----------|-------|
-| API Keys | localStorage (Zustand persist) | Mỗi user tự nhập, không lên server |
-| Profile + JD text | localStorage + sessions.profile_text / sessions.jd_text | Client cache + lưu session để xem lại |
+| API Keys | localStorage (Zustand persist v6) | Mỗi user tự nhập, không lên server |
+| **Interview presets** | localStorage `interviewPresets[]` + `activePresetId` | Nhiều bộ Profile/JD/analysis |
+| Profile + JD text | localStorage (active preset) + `sessions.profile_text` / `sessions.jd_text` | Client cache + lưu session để xem lại |
+| Preset analysis | localStorage trên preset (`analysis`, `analyzedAt`) | Không sync Supabase — chỉ local |
 | Transcript real-time | Zustand (memory) + Supabase questions | Memory cho hiển thị, DB cho lịch sử |
 | Câu trả lời AI | Zustand (memory) + Supabase questions | Tương tự |
 | Session list | Supabase sessions | Dashboard xem lại các buổi cũ |
@@ -524,12 +554,25 @@ create policy "Users can insert own questions"
 - [x] Meeting preview: collapse khi không capture
 - [x] Remove deprecated AnswerPanel (replace by QnaMainPanel)
 
-### Phase 5: Production
+### Phase 5: Production (DONE)
 - [x] Rate limiting (Upstash Redis + in-memory fallback, 120 req/min/IP)
 - [x] Error monitoring (Sentry — optional via `NEXT_PUBLIC_SENTRY_DSN`)
 - [x] One-click deploy template (`docs/DEPLOY.md`)
 - [x] Manual setup guide for tab capture + mic (`docs/DEPLOY.md` §4)
 - [x] Chrome Extension MVP stub (`extension/` — tabCapture popup)
+- [x] AudioWorklet + ScriptProcessor fallback (`lib/audio.ts`)
+- [x] Pipeline per-tab state (`lib/pipeline-state.ts`)
+
+### Phase 6: Profile Presets & Smart Pipeline (DONE) ★ v4.1
+- [x] Interview presets — multi Profile+JD sets (`stores/settings.ts` v6 migrate)
+- [x] Document upload PDF/DOCX/TXT/MD (`lib/document-import.ts`)
+- [x] Profile↔JD analysis API + UI (`/api/analyze-profile`, `AnalysisPanel`)
+- [x] Settings modal redesign — sidebar, workflow steps, maximize mode
+- [x] Preset readiness gate — banner + MicControl block Start
+- [x] Question extract + lecture/monologue filter (`lib/question-extract.ts`)
+- [x] Debounced transcript merge — lecture-friendly (`lib/transcript-merge.ts`, `lib/pipeline.ts`)
+- [x] Answer language **Same as source** default + `lib/answer-language.ts`
+- [x] AI prompt hardening — candidate voice, source language
 
 ---
 
@@ -546,6 +589,8 @@ create policy "Users can insert own questions"
 - [x] Post-interview: lưu Supabase + download transcript JSON/TXT trong <5 giây
 - [x] PWA install được như app desktop
 - [x] Google Auth hoạt động — session lưu theo user
+- [x] Nhiều preset Profile+JD — chọn đúng bộ, upload document, phân tích trước PV
+- [x] Lecture/monologue STT không trigger AI answer nhầm
 
 ---
 
@@ -558,15 +603,16 @@ create policy "Users can insert own questions"
 | **AI answer trigger** | Auto gen khi có final transcript, không cần click ✅ |
 | **Question type detection** | Phân loại behavioral/technical/situational/competency trước gen answer ✅ |
 | **Post-interview summary** | Lưu Supabase + recap + download JSON/TXT ✅ |
-| **Profile + JD** | Paste tay (textarea) + tool external: doctomd.com, lightpdf.com/pdf-to-markdown ✅ |
-| **API keys** | Nhập từ màn hình web → localStorage, tự nhập, browser nhớ ✅ |
-| **Supabase** | PostgreSQL free tier + Auth (Google login) + Realtime ✅ |
-| **Translation default** | DeepSeek (dùng chung key AI, rẻ hơn Google ~40x) ✅ |
-| **Meeting capture** | getDisplayMedia + tab audio (không cần mic ngoài) ✅ |
-| **Session states** | Stop Listening = pause (DB active), End Session = kết thúc ✅ |
-| **Realtime sync** | Supabase Realtime — đồng bộ questions giữa các tab ✅ |
+| **Profile + JD** | Paste + **upload PDF/DOCX/TXT/MD** + **nhiều preset** + phân tích AI ✅ |
+| **Start Listening gate** | Bắt buộc Profile + JD đủ trên active preset ✅ |
+| **Answer language default** | Same as source (STT lang) ✅ |
+| **API keys** | Nhập từ Settings → localStorage (Zustand persist v6) ✅ |
+| **Supabase** | PostgreSQL + Auth (Google) + Realtime ✅ |
+| **Translation default** | DeepSeek (dùng chung key AI) ✅ |
+| **Meeting capture** | getDisplayMedia + Share tab audio ✅ |
+| **Session states** | Stop Listening = pause; End Session = kết thúc ✅ |
 | **PWA** | Install as app + offline fallback ✅ |
-| **Chrome Extension** | Phase 4 — capture system audio tự động, không cần mic ngoài ✅ |
+| **Chrome Extension** | MVP stub only — web Share tab audio vẫn là luồng chính ✅ |
 
 ---
 
@@ -574,11 +620,15 @@ create policy "Users can insert own questions"
 
 ```
 interview-copilot-web/
-├── package.json              # Next 14, React 18, Zustand 5, Supabase SSR
+├── package.json              # Next 14, React 18, Zustand 5, pdfjs-dist, mammoth, Supabase SSR
 ├── next.config.js
 ├── tailwind.config.js
 ├── tsconfig.json
 ├── vercel.json
+├── extension/                # Chrome Extension MVP stub (tabCapture — chưa tích hợp web app)
+├── public/
+│   ├── manifest.webmanifest  # PWA manifest
+│   └── sw.js                 # Service worker (precache + offline fallback)
 ├── middleware.ts             # Supabase SSR middleware (auth refresh)
 ├── app/
 │   ├── layout.tsx            # Root layout (fonts + AppProviders)
@@ -592,20 +642,21 @@ interview-copilot-web/
 │   └── api/
 │       ├── translate/route.ts         # Translation proxy (DeepSeek + Google)
 │       ├── answer/route.ts            # DeepSeek answer proxy (streaming SSE)
+│       ├── analyze-profile/route.ts   # ★ Profile↔JD analysis (DeepSeek, Vietnamese MD)
 │       ├── classify-question/route.ts # Question type classifier
 │       └── deepgram-token/route.ts    # Deepgram temp token
 ├── components/
 │   ├── InterviewPage.tsx     # Main layout orchestrator (v3.0 — 3-column: menu | Q&A main | controls)
-│   ├── MicControl.tsx        # Start/Stop/End + mic device selector
-│   ├── TranscriptPanel.tsx   # Bottom bar: interim + interim translation (v3.0: chỉ hiển thị interim)
-│   ├── AnswerPanel.tsx       # (v3.0 deprecated) → replace with QnaMainPanel
-│   ├── QnaCard.tsx           # ★ NEW (v3.0) — 1 card = question (gốc + dịch) + answer + actions
-│   ├── QnaMainPanel.tsx      # ★ NEW (v3.0) — scrollable list of QnaCards, auto-scroll
+│   ├── MicControl.tsx        # Start/Stop/End + mic selector + preset readiness gate
+│   ├── TranscriptPanel.tsx   # Bottom bar: interim + interim translation only
+│   ├── QnaCard.tsx           # 1 card = question (gốc + dịch) + answer + actions
+│   ├── QnaMainPanel.tsx      # Scrollable QnaCard list, auto-scroll
 │   ├── PiPZone.tsx           # Meeting capture: getDisplayMedia + preview + PiP
-│   ├── SettingsModal.tsx     # Settings panel (tabbed: Keys/Interview/Profile/Display)
-│   ├── ProfileInput.tsx      # Profile + JD textarea (variant: compact/default)
+│   ├── SettingsModal.tsx     # Sidebar nav, maximize, tabs: Keys / Profile&JD / Interview / Display
+│   ├── ProfileInput.tsx      # Presets, upload, workflow steps, AnalysisPanel
+│   ├── ProfilePresetBanner.tsx # Banner when active preset missing profile/JD
 │   ├── RecapScreen.tsx       # Post-interview summary + download JSON/TXT
-│   ├── HistoryPanel.tsx      # Question history sidebar (clickable → scroll to card)
+│   ├── HistoryPanel.tsx      # Question history sidebar (click → scroll to card)
 │   ├── QuestionTypeBadge.tsx # Color-coded badge (behavioral/technical/...)
 │   ├── ConnectionStatus.tsx  # Deepgram reconnecting/error badge
 │   ├── ConfidenceIndicator.tsx # Mic quality bar + % + label
@@ -617,6 +668,8 @@ interview-copilot-web/
 │   ├── AuthButton.tsx        # Login/logout button
 │   ├── InstallPwa.tsx        # PWA install prompt
 │   ├── ErrorBoundary.tsx     # React error boundary
+│   ├── PanelErrorBoundary.tsx # Per-panel error boundaries
+│   ├── ServiceWorkerRegister.tsx # PWA SW (production only)
 │   ├── ThemeSync.tsx         # Sync dark mode class to <html>
 │   ├── providers/
 │   │   ├── AppProviders.tsx  # Wraps ErrorBoundary + AuthProvider + ThemeSync
@@ -631,17 +684,26 @@ interview-copilot-web/
 │   └── useSessionRealtime.ts # Subscribe to Supabase Realtime questions insert
 ├── lib/
 │   ├── deepgram.ts           # Deepgram WebSocket client (Nova-3, reconnect)
-│   ├── audio.ts              # getUserMedia + PCM 16kHz capture (ScriptProcessorNode)
+│   ├── audio.ts              # AudioWorklet (preferred) + ScriptProcessor fallback, PCM 16kHz
 │   ├── translate.ts          # Translation API client (DeepSeek/Google via proxy)
 │   ├── classify.ts           # Question type classifier (heuristic + API)
 │   ├── ai-answer.ts          # DeepSeek answer streaming client
+│   ├── analyze-profile.ts    # Client helper → POST /api/analyze-profile
+│   ├── answer-language.ts    # resolveAnswerLanguageLabel / resolveAnswerLangCode
+│   ├── question-extract.ts   # extractPrimaryQuestion, lecture/monologue filter
+│   ├── document-import.ts    # PDF (pdfjs-dist), DOCX (mammoth), TXT/MD extract
+│   ├── interview-preset-utils.ts # createInterviewPreset, presetReadiness
+│   ├── transcript-merge.ts   # mergeTranscriptFragments, wordCount, endsWithQuestion
+│   ├── pipeline-state.ts     # Per-tab PipelineState + merge debounce timers
+│   ├── interim-translate.ts  # Debounced interim translation for bottom bar
+│   ├── monitoring.ts         # Sentry browser init + captureError
 │   ├── meeting-capture.ts    # getDisplayMedia + surface detection
-│   ├── pipeline.ts           # Orchestrator: STT → translate → classify → answer
+│   ├── pipeline.ts           # Orchestrator: STT → merge → extract → translate → classify → answer
 │   ├── session-export.ts     # Build payload, download JSON/TXT
 │   ├── export-transcript.ts  # Format transcript as markdown
 │   ├── api-keys.ts           # Key accessors + hasRequiredApiKeys()
 │   ├── api-guard.ts          # Rate limit guard for API routes
-│   ├── rate-limit.ts         # In-memory bucket rate limiter (120/min)
+│   ├── rate-limit.ts         # Upstash Redis sliding window + in-memory fallback
 │   ├── server-api-key.ts     # Extract client API key from request header
 │   ├── translation-config.ts # Provider detection + shouldTranslate()
 │   └── supabase/
@@ -653,12 +715,12 @@ interview-copilot-web/
 │       └── realtime.ts       # Subscribe to questions INSERT events
 ├── stores/
 │   ├── transcript.ts         # Zustand: qnaCards, interim, translation cache
-│   ├── settings.ts           # Zustand + persist: API keys, language, style, display
+│   ├── settings.ts           # Zustand v6 persist: keys, presets, activePresetId, language, style
 │   ├── meeting-stream.ts     # Zustand: shared MediaStream reference
 │   ├── recap.ts              # Zustand: recap visibility + meta
 │   └── interview-session.ts  # Zustand: current Supabase session ID
 └── types/
-    ├── index.ts              # Core types (QuestionType, Settings, QuestionHistoryItem...)
+    ├── index.ts              # Core types (InterviewPreset, Settings, QnaCard, TranslationProvider...)
     ├── database.ts           # Supabase table types (InterviewSession, SessionQuestion...)
     └── supabase.ts           # Generated Database type
 ```
@@ -669,25 +731,25 @@ interview-copilot-web/
 
 ### 14.1 Known Issues (cần fix)
 
-| # | Issue | Severity | Root Cause | Fix |
-|---|-------|----------|------------|-----|
-| 1 | **Rate limit không có tác dụng trên Vercel** | HIGH | `lib/rate-limit.ts` dùng in-memory Map — Vercel serverless mỗi request đến instance khác, bucket không được share | Dùng Upstash Redis rate limit hoặc xoá rate limit (ít user) |
-| 2 | **Translation race condition lưu question** | MEDIUM | `pipeline.ts` line 128-131: khi lưu question, dùng `translatedText || cache || text` — nếu translate chưa kịp chạy xong, question lưu text gốc thay vì bản dịch | Await translation promise trước khi lưu, hoặc lưu translatedText riêng sau |
-| 3 | **Module-level state leak khi multi-tab** | MEDIUM | `pipeline.ts` dùng let variables global (deepgramClient, audioCapture, answerAbort) — nếu mở 2 tab cùng domain, audio/WebSocket leak | Wrap pipeline vào class instance hoặc dùng Zustand store |
-| 4 | **ScriptProcessorNode deprecated** | LOW | `lib/audio.ts` dùng `createScriptProcessor` (deprecated từ 2014). Chrome vẫn hỗ trợ nhưng console warning. Khi Chrome drop, app hỏng | Migrate sang AudioWorklet + AudioWorkletProcessor |
-| 5 | **Vercel custom header x-api-key** | MEDIUM | Cần test: Vercel edge có strip custom headers không. Header `x-api-key` gửi từ client đến Next.js API proxy | Dùng prefix `x-hermes-` hoặc gửi trong body, test production deploy |
-| 6 | **Deepgram cắt câu sai (sentence chopping)** | HIGH | `endpointing: "300"` quá ngắn — speaker tạm dừng 300ms bị Deepgram coi là hết câu, gây fragment | Tăng `endpointing: "800"` + `utterance_end_ms: "1200"` + fragment merge logic trong `onFinalTranscript` — ✅ đã fix v4.0 |
+| # | Issue | Severity | Status | Notes |
+|---|-------|----------|--------|-------|
+| 1 | **Rate limit trên Vercel** | HIGH | ✅ Fixed | Upstash Redis khi có `UPSTASH_*` env; fallback in-memory dev |
+| 2 | **Translation race khi lưu question** | MEDIUM | ✅ Fixed | `processQnaCard` await `translatedPromise` trước `saveQuestionToSession` |
+| 3 | **Pipeline state leak multi-tab** | MEDIUM | ✅ Fixed | Per-tab `PipelineState` trong `lib/pipeline-state.ts` |
+| 4 | **ScriptProcessorNode deprecated** | LOW | ✅ Mitigated | AudioWorklet ưu tiên; ScriptProcessor fallback |
+| 5 | **Vercel custom header x-api-key** | MEDIUM | ⚠️ Open | Header + body `apiKey` fallback — cần test production deploy |
+| 6 | **Deepgram cắt câu (lecture/video)** | HIGH | ✅ Fixed | endpointing 2200ms, utterance_end 4500ms + debounced merge + question extract |
+| 7 | **Monologue YouTube treated as questions** | MEDIUM | ✅ Fixed | `question-extract.ts` + skip AI answer for non-questions |
+| 8 | **Preset analysis không sync cloud** | LOW | Open | Analysis chỉ localStorage — chưa lưu Supabase |
 
 ### 14.2 Technical Debt & Cải tiến
 
-| # | Cải tiến | Priority | Lý do | Cách làm |
-|---|----------|----------|-------|----------|
-| 1 | **AudioWorklet thay ScriptProcessorNode** | MEDIUM | Ổn định hơn, ít latency, không deprecated | Tạo AudioWorkletProcessor trong worker riêng, pipeline.ts gọi |
-| 2 | **Pipeline state isolation** | MEDIUM | Tránh conflict khi mở 2 tab | Wrap module-level let variables vào class PipelineManager, mỗi instance độc lập |
-| 3 | **End Session loading state** | LOW | UX: khi end session gọi Supabase update, UI không feedback | Thêm loading spinner + disable nút |
-| 4 | **Translation lưu async** | MEDIUM | Translation chạy background, không block AI answer | `saveQuestionToSession` await translation promise hoặc cập nhật sau khi dịch xong |
-| 5 | **API key header hardening** | LOW | Tránh bị Vercel edge strip | Đổi header prefix hoặc merge vào body JSON |
-| 6 | **Fragment merge buffer leak** | LOW | Module-level `mergeBufferAcc` và `mergeCardId` không được clear nếu pipeline khởi tạo lại (ví dụ resume session) | Clear trong `clearCurrent()` hoặc wrap vào class PipelineManager |
+| # | Cải tiến | Priority | Status | Notes |
+|---|----------|----------|--------|-------|
+| 1 | **End Session loading state** | LOW | Open | Spinner + disable nút khi gọi Supabase |
+| 2 | **Production deploy + header test** | MEDIUM | Open | Verify `x-api-key` trên Vercel production |
+| 3 | **Preset sync Supabase** | LOW | Open | Lưu presets theo user_id trên cloud |
+| 4 | **Chrome Extension integration** | LOW | Open | Stub `extension/` chưa nối web app |
 
 ### 14.3 Security Audit
 
@@ -726,8 +788,8 @@ interview-copilot-web/
 | v2.3 | - | PWA + Polish phase features |
 | v2.4 | - | Question type detection, Post-interview summary, Chrome Extension (Phase 4) |
 | v2.5 | - | Match source code: dual translation provider, DeepSeek default, full file structure, session states, 3-phase DONE |
-| v2.6 | Current | Known Issues & Technical Debt section, Security audit, Production readiness checklist |
-| v3.0 | Current | **Layout restructure** — Unified Q&A Flow: gộp transcript + answer vào 1 main panel trung tâm, bottom bar chỉ interim, translation trong card Q&A (ngôn ngữ gốc trước), history panel clickable |
-| v4.0 | Current | **STT tuning + fragment merge** — fix sentence chopping: endpointing 300→800ms, thêm utterance_end_ms + vad_turnoff, merge buffer (≤4 từ gom lại, flush khi đủ 5 fragments hoặc đầu câu mới) |
+| v3.0 | - | **Layout restructure** — Unified Q&A Flow: gộp transcript + answer vào main panel, bottom bar chỉ interim |
+| v4.0 | - | **STT tuning + debounced merge** — endpointing 2200ms, utterance_end 4500ms, lecture-friendly flush |
+| v4.1 | **Current** | **Interview presets**, document upload, Profile↔JD analysis, Settings modal redesign + maximize, question extract + monologue filter, Same as source default, AI prompt hardening |
 
 ---
