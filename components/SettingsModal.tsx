@@ -313,6 +313,7 @@ function SettingsNavItem({
 function SettingsFooterStatus({ tab }: { tab: SettingsTab }) {
   const keys = hasRequiredApiKeys();
   const profileIncomplete = useActivePresetIncomplete();
+  const settings = useSettingsStore();
   const activePreset = useSettingsStore((s) =>
     s.interviewPresets.find((p) => p.id === s.activePresetId)
   );
@@ -345,6 +346,30 @@ function SettingsFooterStatus({ tab }: { tab: SettingsTab }) {
           : activePreset?.analysis
             ? `${activePreset.name} · đã phân tích`
             : `${activePreset?.name ?? "Preset"} · sẵn sàng nghe`}
+      </p>
+    );
+  }
+
+  if (tab === "interview") {
+    const lang =
+      settings.sourceLanguage === "en" ? "English" : "Vietnamese";
+    const target =
+      settings.targetLanguage === "en" ? "English" : "Vietnamese";
+    return (
+      <p className="text-[11px] text-slate-600">
+        STT: {lang} → Dịch: {target} ·{" "}
+        {translationProviderLabel(settings.translationProvider)} · Trả lời:{" "}
+        {settings.answerLanguage} · Confidence{" "}
+        {settings.confidenceThreshold.toFixed(2)}
+      </p>
+    );
+  }
+
+  if (tab === "display") {
+    return (
+      <p className="text-[11px] text-slate-600">
+        Text: {settings.textSize} · Theme:{" "}
+        {settings.darkMode ? "Dark" : "Light"}
       </p>
     );
   }

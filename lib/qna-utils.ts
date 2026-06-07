@@ -6,7 +6,7 @@ export function qnaCardToHistoryItem(card: QnaCard): QuestionHistoryItem {
     original: card.original,
     translated: card.translated ?? "",
     answer: card.answer ?? "",
-    questionType: card.questionType ?? "behavioral",
+    questionType: card.questionType,
     timestamp: card.timestamp,
   };
 }

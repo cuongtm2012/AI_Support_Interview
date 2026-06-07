@@ -68,7 +68,7 @@ export async function saveQuestionToSession(params: {
   transcriptRaw: string;
   transcriptTranslated: string;
   aiAnswer: string;
-  questionType: QuestionType;
+  questionType: QuestionType | null;
   answerLanguage: AnswerLanguage;
   sourceLanguage: LanguageCode;
   targetLanguage: LanguageCode;

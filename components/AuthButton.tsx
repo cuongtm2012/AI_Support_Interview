@@ -1,14 +1,32 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHydrated } from "@/hooks/useHydrated";
 import { Button } from "@/components/ui/Button";
 
 export function AuthButton() {
   const hydrated = useHydrated();
-  const { user, loading, configured, signInWithGoogle, signOut } = useAuth();
+  const { user, loading, configured, signOut } = useAuth();
 
-  if (!hydrated || !configured) return null;
+  if (!hydrated) {
+    return (
+      <span className="inline-block w-20 text-xs text-slate-500">Đang tải...</span>
+    );
+  }
+
+  if (!configured) {
+    return (
+      <Button
+        variant="secondary"
+        disabled
+        title="Thêm NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_ANON_KEY vào .env.local"
+        className="!py-1.5 !text-xs opacity-60"
+      >
+        Đăng nhập
+      </Button>
+    );
+  }
 
   if (loading) {
     return (
@@ -36,12 +54,11 @@ export function AuthButton() {
   }
 
   return (
-    <Button
-      variant="secondary"
-      onClick={() => void signInWithGoogle()}
-      className="!py-1.5 !text-xs"
+    <Link
+      href="/login"
+      className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-accent/30 bg-white/5 px-3 py-1.5 text-xs font-medium text-accent transition duration-200 hover:bg-white/10"
     >
-      Đăng nhập Google
-    </Button>
+      Đăng nhập
+    </Link>
   );
 }

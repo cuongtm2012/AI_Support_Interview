@@ -74,6 +74,8 @@ export const useSettingsStore = create<SettingsStore>()(
                   ? { profileText: partial.profileText }
                   : {}),
                 ...(partial.jdText !== undefined ? { jdText: partial.jdText } : {}),
+                analysis: null,
+                analyzedAt: null,
               }
             );
           }
@@ -177,6 +179,24 @@ export const useSettingsStore = create<SettingsStore>()(
         }
         return s as SettingsState;
       },
+      partialize: (state) => ({
+        deepgramApiKey: state.deepgramApiKey,
+        deepseekApiKey: state.deepseekApiKey,
+        googleTranslateApiKey: state.googleTranslateApiKey,
+        translationProvider: state.translationProvider,
+        sourceLanguage: state.sourceLanguage,
+        targetLanguage: state.targetLanguage,
+        answerStyle: state.answerStyle,
+        answerLanguage: state.answerLanguage,
+        micDeviceId: state.micDeviceId,
+        profileText: state.profileText,
+        jdText: state.jdText,
+        interviewPresets: state.interviewPresets,
+        activePresetId: state.activePresetId,
+        confidenceThreshold: state.confidenceThreshold,
+        textSize: state.textSize,
+        darkMode: state.darkMode,
+      }),
     }
   )
 );

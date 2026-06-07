@@ -34,6 +34,7 @@ import {
   isLectureMonologue,
   isLikelyInterviewQuestion,
 } from "@/lib/question-extract";
+import { presetReadiness } from "@/lib/interview-preset-utils";
 import {
   endsWithQuestion,
   endsWithSentence,
@@ -138,7 +139,7 @@ async function processQnaCard(
         transcriptRaw: displayText,
         transcriptTranslated: translated ?? "",
         aiAnswer: "",
-        questionType: "behavioral",
+        questionType: null,
         answerLanguage: settings.answerLanguage,
         sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
@@ -279,13 +280,13 @@ function tryFlushMergeBuffer(state: PipelineState): void {
     return;
   }
 
-  if (extractPrimaryQuestion(fullText) && idleMs >= MERGE_IDLE_QUESTION_MS) {
+  if (extractPrimaryQuestion(fullText) && words >= MIN_FLUSH_WORDS && idleMs >= MERGE_IDLE_QUESTION_MS) {
     flushMergeBuffer(state, state.lastSegmentConfidence);
     return;
   }
 
-  // Clear standalone question — finalize after shorter pause
-  if (endsWithQuestion(fullText) && words >= 6 && idleMs >= MERGE_IDLE_QUESTION_MS) {
+  // Clear standalone question — finalize after shorter pause (still min word count)
+  if (endsWithQuestion(fullText) && words >= MIN_FLUSH_WORDS && idleMs >= MERGE_IDLE_QUESTION_MS) {
     flushMergeBuffer(state, state.lastSegmentConfidence);
     return;
   }
@@ -311,7 +312,7 @@ function tryFlushMergeBuffer(state: PipelineState): void {
     return;
   }
 
-  if (idleMs >= MERGE_FORCE_FLUSH_MS && words >= 5) {
+  if (idleMs >= MERGE_FORCE_FLUSH_MS && words >= MIN_FLUSH_WORDS) {
     flushMergeBuffer(state, state.lastSegmentConfidence);
   } else {
     scheduleMergeFlush(state);
@@ -424,6 +425,15 @@ async function startAudioCapture(state: PipelineState): Promise<void> {
 export async function startListening(): Promise<void> {
   const state = getPipelineState();
   const settings = useSettingsStore.getState();
+  const active = settings.interviewPresets.find(
+    (p) => p.id === settings.activePresetId
+  );
+  if (!active || !presetReadiness(active).ok) {
+    throw new Error(
+      "Chưa đủ Profile hoặc JD trên bộ đang chọn — mở Settings → Profile & JD"
+    );
+  }
+
   const existingSessionId = useInterviewSessionStore.getState().dbSessionId;
   const isResume = !!existingSessionId;
 

@@ -23,9 +23,9 @@ export function useSessionRealtime() {
       if (exists) return;
 
       const rawType = q.question_type ?? "";
-      const qType: QuestionType = isQuestionType(rawType)
+      const qType: QuestionType | null = isQuestionType(rawType)
         ? rawType
-        : "behavioral";
+        : null;
 
       syncQnaCardFromRemote({
         original: q.transcript_raw,

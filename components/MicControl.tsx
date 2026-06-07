@@ -5,11 +5,18 @@ import { useTranscriptStore } from "@/stores/transcript";
 import { useSettingsStore } from "@/stores/settings";
 import { listAudioDevices, requestMicPermission } from "@/lib/audio";
 import { hasRequiredApiKeys } from "@/lib/api-keys";
-import { startListening, stopListening, endSession } from "@/lib/pipeline";
 import { useInterviewSessionStore } from "@/stores/interview-session";
-import { presetReadiness } from "@/lib/interview-preset-utils";
+import {
+  presetReadiness,
+  formatPresetMissingLabels,
+} from "@/lib/interview-preset-utils";
 import { Button } from "@/components/ui/Button";
 import { IconMic, IconStop } from "@/components/ui/Icons";
+
+function selectPresetReady(s: ReturnType<typeof useSettingsStore.getState>): boolean {
+  const active = s.interviewPresets.find((p) => p.id === s.activePresetId);
+  return active ? presetReadiness(active).ok : false;
+}
 
 export function MicControl() {
   const isListening = useTranscriptStore((s) => s.isListening);
@@ -19,6 +26,9 @@ export function MicControl() {
   const activePreset = useSettingsStore((s) =>
     s.interviewPresets.find((p) => p.id === s.activePresetId)
   );
+  const presetReady = useSettingsStore(selectPresetReady);
+  const keysReady = hasRequiredApiKeys().ok;
+  const canStart = keysReady && presetReady;
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,6 +50,7 @@ export function MicControl() {
     setError(null);
     setEnding(true);
     try {
+      const { endSession } = await import("@/lib/pipeline");
       await endSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thể kết thúc session");
@@ -50,6 +61,8 @@ export function MicControl() {
 
   const toggleListening = async () => {
     setError(null);
+    const { stopListening, startListening } = await import("@/lib/pipeline");
+
     if (isListening) {
       stopListening();
       return;
@@ -61,16 +74,14 @@ export function MicControl() {
       return;
     }
 
-    if (activePreset && !presetReadiness(activePreset).ok) {
-      const { missing: presetMissing } = presetReadiness(activePreset);
-      const labels =
-        presetMissing.length === 2
-          ? "Profile/JD"
-          : presetMissing[0] === "profile"
-            ? "Profile"
-            : "JD";
+    if (!presetReady) {
+      const missingFields: ("profile" | "jd")[] = activePreset
+        ? presetReadiness(activePreset).missing
+        : ["profile", "jd"];
       setError(
-        `Bộ "${activePreset.name}" thiếu ${labels} — mở Settings → Profile`
+        activePreset
+          ? `Bộ "${activePreset.name}" thiếu ${formatPresetMissingLabels(missingFields)} — mở Settings → Profile`
+          : "Chưa chọn bộ Profile + JD — mở Settings → Profile"
       );
       return;
     }
@@ -87,7 +98,6 @@ export function MicControl() {
   };
 
   const presetName = activePreset?.name ?? "Chưa chọn bộ";
-  const presetReady = activePreset ? presetReadiness(activePreset).ok : false;
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -96,7 +106,7 @@ export function MicControl() {
         variant={isListening ? "danger" : "primary"}
         icon={isListening ? <IconStop size={16} /> : <IconMic size={16} />}
         onClick={() => void toggleListening()}
-        disabled={loading || ending}
+        disabled={loading || ending || (!isListening && !canStart)}
         className="!px-6 !py-3"
       >
         {loading

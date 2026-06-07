@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PiPZone } from "@/components/PiPZone";
 import { QnaMainPanel } from "@/components/QnaMainPanel";
 import { TranscriptPanel } from "@/components/TranscriptPanel";
@@ -10,9 +11,9 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ApiKeyBanner } from "@/components/ApiKeyBanner";
 import { ProfilePresetBanner } from "@/components/ProfilePresetBanner";
-import { LoginBanner } from "@/components/LoginBanner";
-import { AuthErrorBanner } from "@/components/AuthErrorBanner";
+import { MicFallbackBanner } from "@/components/MicFallbackBanner";
 import { AuthButton } from "@/components/AuthButton";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { IconSettings, IconHistory } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/Panel";
@@ -26,6 +27,8 @@ import { RecapScreen } from "@/components/RecapScreen";
 import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 
 export function InterviewPage() {
+  const router = useRouter();
+  const { user, loading, configured } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<
     "keys" | "interview" | "profile" | "display"
@@ -39,6 +42,12 @@ export function InterviewPage() {
   };
 
   useSessionRealtime();
+
+  useEffect(() => {
+    if (configured && !loading && !user) {
+      router.replace("/login");
+    }
+  }, [configured, loading, user, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -56,6 +65,14 @@ export function InterviewPage() {
       stopListening();
     };
   }, []);
+
+  if (configured && (loading || !user)) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-slate-500">
+        Đang tải Interview Copilot…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col">
@@ -99,10 +116,9 @@ export function InterviewPage() {
         </div>
       </header>
 
-      <AuthErrorBanner />
-      <LoginBanner />
       <ApiKeyBanner onOpenSettings={() => openSettings("keys")} />
       <ProfilePresetBanner onOpenSettings={() => openSettings("profile")} />
+      <MicFallbackBanner />
 
       <main className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:flex-row">
         <aside

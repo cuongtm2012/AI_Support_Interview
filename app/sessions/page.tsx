@@ -10,7 +10,7 @@ import { IconHistory, IconSparkles } from "@/components/ui/Icons";
 import { AuthButton } from "@/components/AuthButton";
 
 export default function SessionsPage() {
-  const { user, loading, configured, signInWithGoogle } = useAuth();
+  const { user, loading, configured } = useAuth();
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
   const [fetching, setFetching] = useState(false);
 
@@ -67,11 +67,11 @@ export default function SessionsPage() {
           <div className="glass-panel flex flex-col items-center gap-4 p-8 text-center">
             <IconSparkles size={32} className="text-accent" />
             <p className="text-slate-300">
-              Đăng nhập Google để xem lịch sử các buổi phỏng vấn đã lưu
+              Đăng nhập để xem lịch sử các buổi phỏng vấn đã lưu
             </p>
-            <Button variant="primary" onClick={() => void signInWithGoogle()}>
-              Đăng nhập Google
-            </Button>
+            <Link href="/login">
+              <Button variant="primary">Đăng nhập</Button>
+            </Link>
           </div>
         )}
 

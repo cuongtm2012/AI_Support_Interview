@@ -7,7 +7,6 @@
   body {
     height: 100%;
     margin: 0;
-    overflow: hidden;
   }
 
   body {
@@ -71,6 +70,22 @@
 
   .settings-section {
     @apply rounded-xl border border-white/[0.06] bg-surface-base/25 p-3.5 sm:p-4;
+  }
+
+  .auth-input-error {
+    @apply border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30;
+  }
+
+  .auth-error-message {
+    @apply text-xs text-red-400;
+  }
+
+  .auth-success-message {
+    @apply text-xs text-emerald-400;
+  }
+
+  .auth-loading-spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white;
   }
 }
 

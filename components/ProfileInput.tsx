@@ -420,11 +420,10 @@ export function ProfileInput({
 
 /** True when active preset is missing profile or JD. */
 export function useActivePresetIncomplete(): boolean {
-  const active = useSettingsStore((s) =>
-    s.interviewPresets.find((p) => p.id === s.activePresetId)
-  );
-  if (!active) return true;
-  return !presetReadiness(active).ok;
+  return useSettingsStore((s) => {
+    const active = s.interviewPresets.find((p) => p.id === s.activePresetId);
+    return !active || !presetReadiness(active).ok;
+  });
 }
 
 export function getActivePresetLabel(): string {

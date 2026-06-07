@@ -67,7 +67,7 @@ export interface QuestionHistoryItem {
   original: string;
   translated: string;
   answer: string;
-  questionType: QuestionType;
+  questionType: QuestionType | null;
   timestamp: number;
 }
 

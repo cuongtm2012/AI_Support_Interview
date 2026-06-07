@@ -22,8 +22,12 @@ export function formatLiveSessionExport(
   }
 
   history.forEach((item, i) => {
-    const typeLabel = QUESTION_TYPE_LABELS[item.questionType];
-    lines.push(`## Question ${i + 1} [${typeLabel}]`);
+    const typeLabel = item.questionType
+      ? QUESTION_TYPE_LABELS[item.questionType]
+      : null;
+    lines.push(
+      `## Question ${i + 1}${typeLabel ? ` [${typeLabel}]` : ""}`
+    );
     lines.push(`**Original:** ${item.original}`);
     if (item.translated) lines.push(`**Translation:** ${item.translated}`);
     if (item.answer) lines.push(`**AI Answer:**\n${item.answer}`);

@@ -1,4 +1,4 @@
-const CACHE = "interview-copilot-v1";
+const CACHE = "interview-copilot-v2";
 const PRECACHE = ["/offline", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -20,6 +20,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const url = new URL(event.request.url);
+
+  // Never cache Next.js chunks — always fetch fresh after deploy/dev rebuild
+  if (url.pathname.startsWith("/_next/")) return;
+
+  if (url.pathname.startsWith("/api/")) return;
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -28,9 +35,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     caches.match(event.request).then(

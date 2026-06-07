@@ -125,7 +125,9 @@ export function RecapScreen() {
               <li key={item.id} className="glass-panel p-5">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="label-caps">Q{i + 1}</span>
-                  <QuestionTypeBadge type={item.questionType} />
+                  {item.questionType && (
+                    <QuestionTypeBadge type={item.questionType} />
+                  )}
                 </div>
                 <p className="text-slate-200">{item.original}</p>
                 {item.translated && item.translated !== item.original && (

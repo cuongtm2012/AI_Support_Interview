@@ -1,6 +1,7 @@
 "use client";
 
 import { useSettingsStore } from "@/stores/settings";
+import { resolveAnswerLangCode } from "@/lib/answer-language";
 import { shouldTranslate } from "@/lib/translation-config";
 import { regenerateAnswer } from "@/lib/pipeline";
 import { QuestionTypeBadge } from "@/components/QuestionTypeBadge";
@@ -30,8 +31,13 @@ export function QnaCardView({
   highlighted,
   onHighlightEnd,
 }: QnaCardProps) {
-  const { sourceLanguage, targetLanguage, textSize, translationProvider } =
-    useSettingsStore();
+  const {
+    sourceLanguage,
+    targetLanguage,
+    answerLanguage,
+    textSize,
+    translationProvider,
+  } = useSettingsStore();
   const showTranslation =
     translationProvider !== "none" &&
     shouldTranslate(sourceLanguage, targetLanguage);
@@ -45,7 +51,12 @@ export function QnaCardView({
     if (!card.answer || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(card.answer);
-    utterance.lang = targetLanguage === "vi" ? "vi-VN" : "en-US";
+    const answerLang = resolveAnswerLangCode(
+      answerLanguage,
+      sourceLanguage,
+      targetLanguage
+    );
+    utterance.lang = answerLang === "vi" ? "vi-VN" : "en-US";
     window.speechSynthesis.speak(utterance);
   };
 
