@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interview Copilot</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 12px;
+        width: 260px;
+        color: #e2e8f0;
+        background: #0f172a;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 8px;
+        background: #6366f1;
+        color: white;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      p {
+        font-size: 12px;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+      #status {
+        margin-top: 8px;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 14px; margin: 0 0 8px">Interview Copilot</h1>
+    <p>
+      MVP: capture tab audio qua <code>tabCapture</code>. Mở app web → chọn tab Meet/YouTube → bật Share tab audio.
+    </p>
+    <button id="capture">Capture tab hiện tại</button>
+    <p id="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

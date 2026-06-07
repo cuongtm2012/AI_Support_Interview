@@ -15,7 +15,6 @@ export type AudioCaptureHandle = {
   stop: () => void;
 };
 
-/** Capture from microphone → PCM 16kHz mono for Deepgram */
 export function createAudioCapture(
   deviceId: string | undefined,
   onChunk: (data: ArrayBufferLike) => void
@@ -36,7 +35,6 @@ export function createAudioCapture(
   );
 }
 
-/** Capture from tab/window stream (Share tab audio) → PCM 16kHz mono */
 export function createAudioCaptureFromStream(
   stream: MediaStream,
   onChunk: (data: ArrayBufferLike) => void
@@ -54,40 +52,77 @@ function createPcmCapture(
   let stream: MediaStream | null = null;
   let audioContext: AudioContext | null = null;
   let processor: ScriptProcessorNode | null = null;
+  let workletNode: AudioWorkletNode | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
+  let inputRate = TARGET_SAMPLE_RATE;
+
+  const emitPcm = (input: Float32Array) => {
+    const pcm = floatTo16BitPCMResampled(input, inputRate, TARGET_SAMPLE_RATE);
+    onChunk(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
+  };
 
   const start = async () => {
     stream = await acquireStream();
-    const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length === 0) {
+    if (stream.getAudioTracks().length === 0) {
       throw new Error("Không có track âm thanh trong nguồn đã chọn");
     }
 
     audioContext = new AudioContext();
-    const inputRate = audioContext.sampleRate;
+    inputRate = audioContext.sampleRate;
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
     source = audioContext.createMediaStreamSource(stream);
+
+    const silentGain = audioContext.createGain();
+    silentGain.gain.value = 0;
+
+    const useWorklet =
+      typeof AudioWorkletNode !== "undefined" &&
+      audioContext.audioWorklet !== undefined;
+
+    if (useWorklet) {
+      try {
+        await audioContext.audioWorklet.addModule("/pcm-processor.js");
+        workletNode = new AudioWorkletNode(audioContext, "pcm-processor", {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          channelCount: 1,
+        });
+        workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
+          if (e.data?.length) emitPcm(e.data);
+        };
+        source.connect(workletNode);
+        workletNode.connect(silentGain);
+        silentGain.connect(audioContext.destination);
+        return;
+      } catch (err) {
+        console.warn("[audio] AudioWorklet failed, using ScriptProcessor", err);
+        workletNode = null;
+      }
+    }
+
     processor = audioContext.createScriptProcessor(4096, 1, 1);
-
     processor.onaudioprocess = (e) => {
-      const input = e.inputBuffer.getChannelData(0);
-      const pcm = floatTo16BitPCMResampled(input, inputRate, TARGET_SAMPLE_RATE);
-      onChunk(
-        pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength)
-      );
+      emitPcm(e.inputBuffer.getChannelData(0));
     };
-
     source.connect(processor);
-    processor.connect(audioContext.destination);
+    processor.connect(silentGain);
+    silentGain.connect(audioContext.destination);
   };
 
   const stop = () => {
     processor?.disconnect();
+    workletNode?.disconnect();
     source?.disconnect();
     if (opts.stopTracksOnEnd) {
       stream?.getTracks().forEach((t) => t.stop());
     }
     void audioContext?.close();
     processor = null;
+    workletNode = null;
     source = null;
     stream = null;
     audioContext = null;

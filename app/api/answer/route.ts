@@ -8,18 +8,8 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat";
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimitResponse(req);
+  const limited = await rateLimitResponse(req);
   if (limited) return limited;
-
-  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY);
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({
-        error: "DeepSeek API key required (Settings → API Keys)",
-      }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
-    );
-  }
 
   let body: {
     question?: string;
@@ -28,6 +18,7 @@ export async function POST(req: NextRequest) {
     jdText?: string;
     answerStyle?: string;
     answerLanguage?: string;
+    apiKey?: string;
   };
   try {
     body = await req.json();
@@ -36,6 +27,16 @@ export async function POST(req: NextRequest) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY, body);
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({
+        error: "DeepSeek API key required (Settings → API Keys)",
+      }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   const {

@@ -250,11 +250,15 @@ API Key Flow:
 3. STT (Deepgram WebSocket)
    - fetch /api/deepgram-token → nhận temporary token
    - WebSocket wss://api.deepgram.com/v1/listen?model=nova-3&language=...
-   - Stream audio chunks → nhận interim + final transcript
-   - Interim: hiện text đang nhận dạng (mờ dần)
-   - Final: text chính xác (in đậm) → trigger dịch + classify + AI answer
-   - Auto reconnect: 5 lần retry, exponential backoff (1s base)
-   - keepAliveInterval mỗi 5s → ping WebSocket
+  - Stream audio chunks → nhận interim + final transcript
+  - Interim: hiện text đang nhận dạng (mờ dần)
+  - Final: text chính xác (in đậm) → trigger dịch + classify + AI answer
+  - Deepgram params tuning:
+    - `endpointing: "800"` — 800ms silence để quyết định end-of-utterance (từ 300ms)
+    - `utterance_end_ms: "1200"` — utterance-level detection, gom các final transcript
+    - `vad_turnoff: "800"` — thời gian VAD detect silence
+  - Auto reconnect: 5 lần retry, exponential backoff (1s base)
+  - keepAliveInterval mỗi 10s → ping WebSocket
 
 4. TRANSLATION (tùy chọn, background)
    - Khi có final transcript → gọi translate API
@@ -316,16 +320,21 @@ API Key Flow:
    - Supabase lưu: sessions (profile, JD, lang, style) + questions (từng câu hỏi)
 ```
 
-### Q&A Card Flow (v3.0)
+### Q&A Card Flow (v3.0 — with Fragment Merge)
 
 Khi final transcript đến từ Deepgram:
 
-1. Final text → tạo **QnaCard** mới ở cuối QnaMainPanel
-2. Card state: `{ status: "transcribing", original: finalText, translated: null, answer: null }`
-3. **translateInBackground** chạy song song → khi có kết quả → update card: `translated: "..." `
-4. **classify + generateAnswer** chạy → khi có answer → update card: `answer: "...", status: "complete" `
-5. Auto-scroll đến card mới nhất
-6. Bottom bar interim vẫn chạy độc lập, không ảnh hưởng đến cards
+1. Final text kiểm tra: **ngắn (≤4 từ) + không phải đầu câu mới** → gom vào **merge buffer** của card hiện tại (không tạo card mới)
+2. Merge buffer flush khi:
+   - Đã gom đủ **5 fragments** → trigger processQnaCard với text hoàn chỉnh
+   - Final text mới là **đầu câu mới** (chữ hoa) → flush buffer cũ, tạo card mới
+   - **End Session** → flush buffer còn lại
+3. Khi process được trigger:
+   - Card state: `{ status: "transcribing", original: mergedText }`
+   - **translateInBackground** chạy song song → update card: `translated: "..."`
+   - **classify + generateAnswer** chạy → update card: `answer: "...", status: "complete"`
+4. Auto-scroll đến card mới nhất
+5. Bottom bar interim vẫn chạy độc lập, không ảnh hưởng đến cards
 
 ### Session States
 
@@ -506,21 +515,21 @@ create policy "Users can insert own questions"
 - [x] ConnectionStatus badge (reconnecting/error/disconnected)
 
 ### Phase 4: Layout Restructure — v3.0
-- [ ] Create QnaCard component (question gốc + dịch + answer + actions)
-- [ ] Create QnaMainPanel component (scrollable card list + auto-scroll)
-- [ ] Restructure InterviewPage layout (sidebar | main panel | bottom interim bar)
-- [ ] Update TranscriptPanel: chỉ hiển thị interim text + interim translation
-- [ ] Update pipeline.ts: final transcript → push card vào QnaMainPanel thay vì setState riêng
-- [ ] HistoryPanel: click → scroll đến card tương ứng
-- [ ] Meeting preview: collapse khi không capture
-- [ ] Remove deprecated AnswerPanel (replace by QnaMainPanel)
+- [x] Create QnaCard component (question gốc + dịch + answer + actions)
+- [x] Create QnaMainPanel component (scrollable card list + auto-scroll)
+- [x] Restructure InterviewPage layout (sidebar | main panel | bottom interim bar)
+- [x] Update TranscriptPanel: chỉ hiển thị interim text + interim translation
+- [x] Update pipeline.ts: final transcript → push card vào QnaMainPanel thay vì setState riêng
+- [x] HistoryPanel: click → scroll đến card tương ứng
+- [x] Meeting preview: collapse khi không capture
+- [x] Remove deprecated AnswerPanel (replace by QnaMainPanel)
 
 ### Phase 5: Production
-- [ ] Rate limiting (in-memory bucket, 120 req/min/IP)
-- [ ] Error monitoring (Sentry)
-- [ ] One-click deploy template
-- [ ] Manual setup guide for tab capture + mic
-- [ ] Chrome Extension — capture system audio tự động (không cần chọn tab thủ công)
+- [x] Rate limiting (Upstash Redis + in-memory fallback, 120 req/min/IP)
+- [x] Error monitoring (Sentry — optional via `NEXT_PUBLIC_SENTRY_DSN`)
+- [x] One-click deploy template (`docs/DEPLOY.md`)
+- [x] Manual setup guide for tab capture + mic (`docs/DEPLOY.md` §4)
+- [x] Chrome Extension MVP stub (`extension/` — tabCapture popup)
 
 ---
 
@@ -643,9 +652,8 @@ interview-copilot-web/
 │       ├── sessions.ts       # CRUD: create/end/fetch sessions + questions
 │       └── realtime.ts       # Subscribe to questions INSERT events
 ├── stores/
-│   ├── transcript.ts         # Zustand: interim/final text, translation, history, cache
+│   ├── transcript.ts         # Zustand: qnaCards, interim, translation cache
 │   ├── settings.ts           # Zustand + persist: API keys, language, style, display
-│   ├── answer.ts             # Zustand: current answer + question type + loading state
 │   ├── meeting-stream.ts     # Zustand: shared MediaStream reference
 │   ├── recap.ts              # Zustand: recap visibility + meta
 │   └── interview-session.ts  # Zustand: current Supabase session ID
@@ -668,7 +676,7 @@ interview-copilot-web/
 | 3 | **Module-level state leak khi multi-tab** | MEDIUM | `pipeline.ts` dùng let variables global (deepgramClient, audioCapture, answerAbort) — nếu mở 2 tab cùng domain, audio/WebSocket leak | Wrap pipeline vào class instance hoặc dùng Zustand store |
 | 4 | **ScriptProcessorNode deprecated** | LOW | `lib/audio.ts` dùng `createScriptProcessor` (deprecated từ 2014). Chrome vẫn hỗ trợ nhưng console warning. Khi Chrome drop, app hỏng | Migrate sang AudioWorklet + AudioWorkletProcessor |
 | 5 | **Vercel custom header x-api-key** | MEDIUM | Cần test: Vercel edge có strip custom headers không. Header `x-api-key` gửi từ client đến Next.js API proxy | Dùng prefix `x-hermes-` hoặc gửi trong body, test production deploy |
-| 6 | **Transcript dedup quá aggressive** | LOW | `hashText = trim().toLowerCase()` — 2 câu khác nhau bắt đầu giống bị dedup | Thêm độ dài hoặc full string hash vào key |
+| 6 | **Deepgram cắt câu sai (sentence chopping)** | HIGH | `endpointing: "300"` quá ngắn — speaker tạm dừng 300ms bị Deepgram coi là hết câu, gây fragment | Tăng `endpointing: "800"` + `utterance_end_ms: "1200"` + fragment merge logic trong `onFinalTranscript` — ✅ đã fix v4.0 |
 
 ### 14.2 Technical Debt & Cải tiến
 
@@ -679,7 +687,7 @@ interview-copilot-web/
 | 3 | **End Session loading state** | LOW | UX: khi end session gọi Supabase update, UI không feedback | Thêm loading spinner + disable nút |
 | 4 | **Translation lưu async** | MEDIUM | Translation chạy background, không block AI answer | `saveQuestionToSession` await translation promise hoặc cập nhật sau khi dịch xong |
 | 5 | **API key header hardening** | LOW | Tránh bị Vercel edge strip | Đổi header prefix hoặc merge vào body JSON |
-| 6 | **Error boundary cho từng panel** | LOW | ErrorBoundary hiện tại bao toàn bộ app — crash 1 panel → crash cả trang | ErrorBoundary riêng cho AnswerPanel, TranscriptPanel, PiPZone |
+| 6 | **Fragment merge buffer leak** | LOW | Module-level `mergeBufferAcc` và `mergeCardId` không được clear nếu pipeline khởi tạo lại (ví dụ resume session) | Clear trong `clearCurrent()` hoặc wrap vào class PipelineManager |
 
 ### 14.3 Security Audit
 
@@ -689,8 +697,8 @@ interview-copilot-web/
 | **XSS: no dangerouslySetInnerHTML** | ✅ OK | Toàn bộ render dùng React text nodes, ko có innerHTML |
 | **Supabase RLS** | ✅ OK | Row Level Security cho profiles, sessions, questions |
 | **Auth callback redirect** | ✅ OK | OAuth code exchange — redirect về /, ko open redirect |
-| **Rate limit (production)** | ❌ Cần fix | In-memory không hoạt động trên Vercel serverless |
-| **API key header trên Vercel** | ⚠️ Cần test | Edge function có thể strip custom headers |
+| **Rate limit (production)** | ✅ OK | Upstash Redis khi có env; fallback in-memory dev |
+| **API key header trên Vercel** | ✅ OK | Header + body `apiKey` fallback |
 
 ### 14.4 Production Readiness Checklist
 
@@ -698,12 +706,12 @@ interview-copilot-web/
 - [x] Bundle size: 88.8KB first load
 - [x] PWA: service worker + manifest + offline fallback
 - [x] Deepgram reconnect: 5 retries, exponential backoff
-- [ ] Rate limit: Upstash Redis (thay in-memory)
-- [ ] ScriptProcessorNode → AudioWorklet
-- [ ] Pipeline state isolation
+- [x] Rate limit: Upstash Redis (thay in-memory)
+- [x] ScriptProcessorNode → AudioWorklet (fallback ScriptProcessor)
+- [x] Pipeline state isolation (per-tab `pipeline-state.ts`)
 - [ ] Production deploy + custom header test
-- [ ] Error monitoring (Sentry)
-- [ ] One-click deploy template (Vercel + Supabase)
+- [x] Error monitoring (Sentry)
+- [x] One-click deploy template (Vercel + Supabase)
 
 ---
 
@@ -720,5 +728,6 @@ interview-copilot-web/
 | v2.5 | - | Match source code: dual translation provider, DeepSeek default, full file structure, session states, 3-phase DONE |
 | v2.6 | Current | Known Issues & Technical Debt section, Security audit, Production readiness checklist |
 | v3.0 | Current | **Layout restructure** — Unified Q&A Flow: gộp transcript + answer vào 1 main panel trung tâm, bottom bar chỉ interim, translation trong card Q&A (ngôn ngữ gốc trước), history panel clickable |
+| v4.0 | Current | **STT tuning + fragment merge** — fix sentence chopping: endpointing 300→800ms, thêm utterance_end_ms + vad_turnoff, merge buffer (≤4 từ gom lại, flush khi đủ 5 fragments hoặc đầu câu mới) |
 
 ---

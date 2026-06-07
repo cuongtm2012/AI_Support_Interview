@@ -1,5 +1,10 @@
 import type { LanguageCode } from "@/types";
-import { apiKeyHeaders, getDeepseekApiKey, getGoogleTranslateApiKey } from "@/lib/api-keys";
+import {
+  apiKeyHeaders,
+  getDeepseekApiKey,
+  getGoogleTranslateApiKey,
+  withApiKey,
+} from "@/lib/api-keys";
 import {
   getTranslationProvider,
   shouldTranslate,
@@ -23,7 +28,7 @@ export async function translateText(
   const res = await fetch("/api/translate", {
     method: "POST",
     headers: apiKeyHeaders(key),
-    body: JSON.stringify({ text, source, target, provider }),
+    body: JSON.stringify(withApiKey(key, { text, source, target, provider })),
   });
 
   if (!res.ok) {

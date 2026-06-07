@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Interview Copilot Audio Bridge",
+  "version": "0.1.0",
+  "description": "Capture tab audio for Interview Copilot (MVP stub)",
+  "permissions": ["tabCapture", "storage", "activeTab"],
+  "host_permissions": ["http://localhost:3000/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Interview Copilot",
+    "default_popup": "popup.html"
+  }
+}

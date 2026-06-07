@@ -76,19 +76,8 @@ export interface QnaCard {
 
 export interface TranscriptState {
   interimText: string;
-  finalText: string;
-  translatedText: string;
   isListening: boolean;
   confidence: number | null;
-}
-
-export interface AnswerState {
-  question: string;
-  answer: string;
-  questionType: QuestionType | null;
-  isClassifying: boolean;
-  isGenerating: boolean;
-  error: string | null;
 }
 
 export interface SessionRecapMeta {

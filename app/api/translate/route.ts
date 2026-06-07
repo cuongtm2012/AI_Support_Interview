@@ -3,84 +3,62 @@ import { rateLimitResponse } from "@/lib/api-guard";
 import { getClientApiKey } from "@/lib/server-api-key";
 import type { TranslationProvider } from "@/types";
 
-const LANG_MAP: Record<string, string> = { en: "en", vi: "vi" };
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-const DEEPSEEK_MODEL = "deepseek-chat";
-
-const LANG_NAME: Record<string, string> = {
-  en: "English",
-  vi: "Vietnamese",
+const LANG_MAP: Record<string, string> = {
+  en: "en",
+  vi: "vi",
+  ja: "ja",
+  ko: "ko",
+  zh: "zh",
 };
 
 async function translateGoogle(
   apiKey: string,
   text: string,
-  sourceLang: string,
-  targetLang: string
+  source: string,
+  target: string
 ): Promise<string> {
   const url = new URL("https://translation.googleapis.com/language/translate/v2");
   url.searchParams.set("key", apiKey);
-
-  const res = await fetch(url.toString(), {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      q: text,
-      source: sourceLang,
-      target: targetLang,
-      format: "text",
-    }),
+    body: JSON.stringify({ q: text, source, target, format: "text" }),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Google Translate: ${errText}`);
-  }
-
+  if (!res.ok) throw new Error("Google Translate API failed");
   const data = (await res.json()) as {
     data?: { translations?: Array<{ translatedText?: string }> };
   };
-  return data.data?.translations?.[0]?.translatedText || text;
+  const out = data.data?.translations?.[0]?.translatedText;
+  if (!out) throw new Error("Google returned empty translation");
+  return out;
 }
 
 async function translateDeepseek(
   apiKey: string,
   text: string,
-  sourceLang: string,
-  targetLang: string
+  source: string,
+  target: string
 ): Promise<string> {
-  const sourceName = LANG_NAME[sourceLang] || sourceLang;
-  const targetName = LANG_NAME[targetLang] || targetLang;
-
-  const res = await fetch(DEEPSEEK_API_URL, {
+  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      temperature: 0.1,
-      max_tokens: 2048,
+      model: "deepseek-chat",
+      temperature: 0.3,
+      max_tokens: 2000,
       messages: [
         {
           role: "system",
-          content:
-            "You translate interview questions accurately. Reply with ONLY the translated text—no quotes, labels, or explanation.",
+          content: `Translate from ${source} to ${target}. Output ONLY the translation, no quotes or explanation.`,
         },
-        {
-          role: "user",
-          content: `Translate from ${sourceName} to ${targetName}:\n\n${text}`,
-        },
+        { role: "user", content: text },
       ],
     }),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`DeepSeek translate: ${errText}`);
-  }
-
+  if (!res.ok) throw new Error("DeepSeek translation failed");
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
@@ -90,7 +68,7 @@ async function translateDeepseek(
 }
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimitResponse(req);
+  const limited = await rateLimitResponse(req);
   if (limited) return limited;
 
   let body: {
@@ -98,6 +76,7 @@ export async function POST(req: NextRequest) {
     source?: string;
     target?: string;
     provider?: TranslationProvider;
+    apiKey?: string;
   };
   try {
     body = await req.json();
@@ -126,10 +105,9 @@ export async function POST(req: NextRequest) {
       ? process.env.GOOGLE_TRANSLATE_API_KEY
       : process.env.DEEPSEEK_API_KEY;
 
-  const apiKey = getClientApiKey(req, envFallback);
+  const apiKey = getClientApiKey(req, envFallback, body);
   if (!apiKey) {
-    const label =
-      provider === "google" ? "Google Translate" : "DeepSeek";
+    const label = provider === "google" ? "Google Translate" : "DeepSeek";
     return NextResponse.json(
       { error: `${label} API key required (Settings → API Keys)` },
       { status: 401 }

@@ -22,6 +22,7 @@ import { useMeetingStreamStore } from "@/stores/meeting-stream";
 import { ExportTranscriptButton } from "@/components/ExportTranscriptButton";
 import { InstallPwa } from "@/components/InstallPwa";
 import { RecapScreen } from "@/components/RecapScreen";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 
 export function InterviewPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -99,17 +100,25 @@ export function InterviewPage() {
             hasMeeting ? "" : "lg:max-w-xs"
           }`}
         >
-          <PiPZone compact={!hasMeeting} />
-          <HistoryPanel />
+          <PanelErrorBoundary label="Meeting">
+            <PiPZone compact={!hasMeeting} />
+          </PanelErrorBoundary>
+          <PanelErrorBoundary label="History">
+            <HistoryPanel />
+          </PanelErrorBoundary>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <QnaMainPanel />
+          <PanelErrorBoundary label="Q&A">
+            <QnaMainPanel />
+          </PanelErrorBoundary>
         </div>
       </main>
 
       <footer className="shrink-0 space-y-2 border-t border-white/[0.06] bg-surface-elevated/60 p-4 backdrop-blur-xl">
-        <TranscriptPanel />
+        <PanelErrorBoundary label="Transcript">
+          <TranscriptPanel />
+        </PanelErrorBoundary>
         <div className="flex flex-wrap items-center gap-3">
           <MicControl />
           <ExportTranscriptButton />

@@ -18,6 +18,7 @@ export function MicControl() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ending, setEnding] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -33,13 +34,13 @@ export function MicControl() {
 
   const handleEndSession = async () => {
     setError(null);
-    setLoading(true);
+    setEnding(true);
     try {
       await endSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thể kết thúc session");
     } finally {
-      setLoading(false);
+      setEnding(false);
     }
   };
 
@@ -78,7 +79,7 @@ export function MicControl() {
         variant={isListening ? "danger" : "primary"}
         icon={isListening ? <IconStop size={16} /> : <IconMic size={16} />}
         onClick={() => void toggleListening()}
-        disabled={loading}
+        disabled={loading || ending}
         className="!px-6 !py-3"
       >
         {loading
@@ -92,10 +93,10 @@ export function MicControl() {
         <Button
           variant="secondary"
           onClick={() => void handleEndSession()}
-          disabled={loading}
+          disabled={loading || ending}
           className="!border-accent/40 !text-accent"
         >
-          End Session
+          {ending ? "Đang kết thúc…" : "End Session"}
         </Button>
       )}
 

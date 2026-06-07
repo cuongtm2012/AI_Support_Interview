@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, getRateLimitKey } from "@/lib/rate-limit";
 
-export function rateLimitResponse(req: Request): NextResponse | null {
-  const { ok, retryAfterSec } = checkRateLimit(getRateLimitKey(req));
+export async function rateLimitResponse(
+  req: Request
+): Promise<NextResponse | null> {
+  const { ok, retryAfterSec } = await checkRateLimit(getRateLimitKey(req));
   if (ok) return null;
 
   return NextResponse.json(

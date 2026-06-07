@@ -11,7 +11,8 @@ import { ConnectionStatus } from "@/components/ConnectionStatus";
 const LANG: Record<string, string> = { en: "EN", vi: "VI" };
 
 export function TranscriptPanel() {
-  const { interimText, interimTranslated, isListening } = useTranscriptStore();
+  const { interimText, interimTranslated, isListening, autoScroll, setAutoScroll } =
+    useTranscriptStore();
   const { sourceLanguage, targetLanguage, translationProvider } =
     useSettingsStore();
 
@@ -31,7 +32,18 @@ export function TranscriptPanel() {
             label={isListening ? "Live STT" : "Idle"}
           />
         </div>
-        <ConnectionStatus />
+        <div className="flex items-center gap-3">
+          <ConnectionStatus />
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-500 transition hover:text-slate-400">
+            <input
+              type="checkbox"
+              checked={autoScroll}
+              onChange={(e) => setAutoScroll(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-white/20 bg-surface-base accent-accent"
+            />
+            Auto-scroll Q&A
+          </label>
+        </div>
       </div>
 
       <div className="border-b border-white/[0.06] px-5 py-1.5">
@@ -60,8 +72,10 @@ export function TranscriptPanel() {
               <IconGlobe size={11} />
               {LANG[targetLanguage] ?? "TGT"}
             </span>
-            {interimTranslated || (
-              <span className="text-slate-600">—</span>
+            {interimTranslated ? (
+              <span className="interim-text opacity-80">{interimTranslated}</span>
+            ) : (
+              <span className="text-slate-600">Đang dịch…</span>
             )}
           </p>
         )}

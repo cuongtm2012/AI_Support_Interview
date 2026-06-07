@@ -2,6 +2,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
+import { captureError } from "@/lib/monitoring";
 
 interface Props {
   children: ReactNode;
@@ -20,7 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("[Interview Copilot]", error, info.componentStack);
+    captureError(error, { stack: info.componentStack?.slice(0, 500) ?? "" });
   }
 
   render() {

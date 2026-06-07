@@ -3,7 +3,10 @@ import { apiKeyHeaders, getDeepgramApiKey } from "@/lib/api-keys";
 
 export interface DeepgramCallbacks {
   onInterim: (text: string, confidence: number) => void;
-  onFinal: (text: string, confidence: number) => void;
+  /** Each finalized STT segment — may be a partial phrase, not a full utterance. */
+  onFinalSegment: (text: string, confidence: number) => void;
+  /** Speaker paused long enough (utterance_end_ms) — safe to flush accumulated text. */
+  onUtteranceEnd?: () => void;
   onError: (error: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -63,7 +66,9 @@ export class DeepgramClient {
       language: lang,
       punctuate: "true",
       interim_results: "true",
-      endpointing: "300",
+      endpointing: "1500",
+      utterance_end_ms: "2500",
+      vad_events: "true",
       smart_format: "true",
       encoding: "linear16",
       sample_rate: "16000",
@@ -71,65 +76,98 @@ export class DeepgramClient {
     });
 
     const url = `wss://api.deepgram.com/v1/listen?${params.toString()}`;
-    this.ws = new WebSocket(url, ["token", token]);
 
-    this.ws.onopen = () => {
-      if (this.hasConnectedOnce) {
-        callbacks.onReconnected?.();
-      } else {
-        this.hasConnectedOnce = true;
-        callbacks.onOpen?.();
-      }
-      this.reconnectAttempts = 0;
-      this.keepAliveInterval = setInterval(() => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: "KeepAlive" }));
-        }
-      }, 10000);
-    };
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      this.ws = new WebSocket(url, ["token", token]);
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data as string) as {
-          channel?: {
-            alternatives?: Array<{
-              transcript?: string;
-              confidence?: number;
-            }>;
-          };
-          is_final?: boolean;
-          speech_final?: boolean;
-        };
-
-        const alt = data.channel?.alternatives?.[0];
-        const transcript = alt?.transcript?.trim() || "";
-        const confidence = alt?.confidence ?? 0;
-        if (!transcript) return;
-
-        if (data.is_final || data.speech_final) {
-          callbacks.onFinal(transcript, confidence);
+      this.ws.onopen = () => {
+        settled = true;
+        if (this.hasConnectedOnce) {
+          callbacks.onReconnected?.();
         } else {
-          callbacks.onInterim(transcript, confidence);
+          this.hasConnectedOnce = true;
+          callbacks.onOpen?.();
         }
-      } catch {
-        callbacks.onError("Failed to parse Deepgram response");
-      }
-    };
+        this.reconnectAttempts = 0;
+        this.keepAliveInterval = setInterval(() => {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: "KeepAlive" }));
+          }
+        }, 10000);
+        resolve();
+      };
 
-    this.ws.onerror = () => {
-      if (!this.intentionalClose) {
-        callbacks.onError("Deepgram WebSocket error");
-      }
-    };
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as {
+            type?: string;
+            message?: string;
+            channel?: {
+              alternatives?: Array<{
+                transcript?: string;
+                confidence?: number;
+              }>;
+            };
+            is_final?: boolean;
+            speech_final?: boolean;
+          };
 
-    this.ws.onclose = () => {
-      this.clearKeepAlive();
-      if (this.intentionalClose) {
-        callbacks.onClose?.();
-        return;
-      }
-      this.scheduleReconnect();
-    };
+          if (data.type === "UtteranceEnd") {
+            callbacks.onUtteranceEnd?.();
+            return;
+          }
+
+          if (data.type === "Error") {
+            callbacks.onError(data.message || "Deepgram error");
+            return;
+          }
+
+          const alt = data.channel?.alternatives?.[0];
+          const transcript = alt?.transcript?.trim() || "";
+          const confidence = alt?.confidence ?? 0;
+          if (!transcript) return;
+
+          if (data.is_final) {
+            callbacks.onFinalSegment(transcript, confidence);
+          } else {
+            callbacks.onInterim(transcript, confidence);
+          }
+        } catch {
+          callbacks.onError("Failed to parse Deepgram response");
+        }
+      };
+
+      this.ws.onerror = () => {
+        if (!this.intentionalClose && !settled) {
+          reject(new Error("Deepgram WebSocket error"));
+        }
+      };
+
+      this.ws.onclose = (event) => {
+        this.clearKeepAlive();
+        if (!this.intentionalClose && !settled) {
+          console.warn(
+            "[Deepgram] WebSocket closed before open",
+            event.code,
+            event.reason || "(no reason)"
+          );
+          return;
+        }
+        if (!this.intentionalClose && this.reconnectAttempts === 0) {
+          console.warn(
+            "[Deepgram] WebSocket closed",
+            event.code,
+            event.reason || "(no reason)"
+          );
+        }
+        if (this.intentionalClose) {
+          callbacks.onClose?.();
+          return;
+        }
+        this.scheduleReconnect();
+      };
+    });
   }
 
   private scheduleReconnect(): void {

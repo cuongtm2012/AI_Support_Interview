@@ -1,9 +1,5 @@
 import { DeepgramClient } from "@/lib/deepgram";
-import {
-  createAudioCapture,
-  createAudioCaptureFromStream,
-  type AudioCaptureHandle,
-} from "@/lib/audio";
+import { createAudioCapture, createAudioCaptureFromStream } from "@/lib/audio";
 import {
   hasMeetingAudio,
   useMeetingStreamStore,
@@ -22,23 +18,35 @@ import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
 import { useInterviewSessionStore } from "@/stores/interview-session";
 import { useRecapStore } from "@/stores/recap";
+import {
+  resetInterimTranslation,
+  scheduleInterimTranslation,
+} from "@/lib/interim-translate";
+import {
+  cancelMergeDebounce,
+  clearMergeState,
+  getPipelineState,
+  hashTranscriptKey,
+  type PipelineState,
+} from "@/lib/pipeline-state";
+import {
+  mergeTranscriptFragments,
+  wordCount,
+} from "@/lib/transcript-merge";
 
-let deepgramClient: DeepgramClient | null = null;
-let audioCapture: AudioCaptureHandle | null = null;
-let answerAbort: AbortController | null = null;
-let lastFinalHash = "";
+/** Wait this long after last segment before flushing one Q&A card. */
+const MERGE_IDLE_MS = 2800;
+/** Force flush if accumulated text exceeds this (long monologue). */
+const MAX_CARD_WORDS = 100;
 
-function hashText(text: string): string {
-  return text.trim().toLowerCase();
-}
-
-function stopAudioOnly(): void {
-  audioCapture?.stop();
-  audioCapture = null;
-  deepgramClient?.disconnect();
-  deepgramClient = null;
-  answerAbort?.abort();
-  answerAbort = null;
+function stopAudioOnly(state: PipelineState): void {
+  state.audioCapture?.stop();
+  state.audioCapture = null;
+  state.deepgramClient?.disconnect();
+  state.deepgramClient = null;
+  state.answerAbort?.abort();
+  state.answerAbort = null;
+  resetInterimTranslation();
   useTranscriptStore.getState().setListening(false);
   useTranscriptStore.getState().setDeepgramStatus("idle");
 }
@@ -79,13 +87,14 @@ async function translateForCard(
 }
 
 async function processQnaCard(
+  state: PipelineState,
   cardId: string,
   text: string,
   confidence: number
 ): Promise<void> {
   const settings = useSettingsStore.getState();
   const store = useTranscriptStore.getState();
-  const key = hashText(text);
+  const key = hashTranscriptKey(text);
 
   if (store.hasTranscript(key)) return;
   store.markTranscript(key);
@@ -111,8 +120,8 @@ async function processQnaCard(
     return;
   }
 
-  answerAbort?.abort();
-  answerAbort = new AbortController();
+  state.answerAbort?.abort();
+  state.answerAbort = new AbortController();
 
   store.updateQnaCard(cardId, {
     status: "classifying",
@@ -120,8 +129,12 @@ async function processQnaCard(
     error: null,
   });
 
-  let questionType = (await classifyQuestion(text)).type;
-  store.updateQnaCard(cardId, { questionType, status: "generating", answer: "" });
+  const questionType = (await classifyQuestion(text)).type;
+  store.updateQnaCard(cardId, {
+    questionType,
+    status: "generating",
+    answer: "",
+  });
 
   try {
     await generateAnswerStreaming({
@@ -132,7 +145,7 @@ async function processQnaCard(
       answerStyle: settings.answerStyle,
       answerLanguage: settings.answerLanguage,
       targetLanguage: settings.targetLanguage,
-      signal: answerAbort.signal,
+      signal: state.answerAbort.signal,
       onChunk: (chunk) =>
         useTranscriptStore.getState().appendQnaAnswer(cardId, chunk),
     });
@@ -167,33 +180,89 @@ async function processQnaCard(
   }
 }
 
-async function onFinalTranscript(text: string, confidence: number) {
+function flushMergeBuffer(state: PipelineState, confidence: number): void {
+  cancelMergeDebounce(state);
+  if (!state.mergeCardId || state.mergeBufferAcc.length === 0) return;
+
+  const fullText = mergeTranscriptFragments(state.mergeBufferAcc);
+  if (!fullText) {
+    clearMergeState(state);
+    return;
+  }
+
+  const cid = state.mergeCardId;
+  clearMergeState(state);
+
+  useTranscriptStore.getState().updateQnaCard(cid, {
+    original: fullText,
+    status: "translating",
+  });
+  void processQnaCard(state, cid, fullText, confidence);
+}
+
+function scheduleMergeFlush(state: PipelineState): void {
+  cancelMergeDebounce(state);
+  state.mergeDebounceTimer = setTimeout(() => {
+    state.mergeDebounceTimer = null;
+    flushMergeBuffer(state, state.lastSegmentConfidence);
+  }, MERGE_IDLE_MS);
+}
+
+function appendFinalSegment(
+  state: PipelineState,
+  text: string,
+  confidence: number
+): void {
+  resetInterimTranslation();
+
   const trimmed = text.trim();
   if (!trimmed) return;
 
-  const key = hashText(trimmed);
-  if (key === lastFinalHash) return;
-  lastFinalHash = key;
+  const key = hashTranscriptKey(trimmed);
+  if (state.seenSegmentKeys.has(key)) return;
+  state.seenSegmentKeys.add(key);
+  state.lastSegmentConfidence = confidence;
 
-  const cardId = useTranscriptStore.getState().addQnaCard({
-    original: trimmed,
-    confidence,
-  });
+  const store = useTranscriptStore.getState();
+  state.mergeBufferAcc.push(trimmed);
+  const fullText = mergeTranscriptFragments(state.mergeBufferAcc);
 
-  void processQnaCard(cardId, trimmed, confidence);
+  if (!state.mergeCardId) {
+    state.mergeCardId = store.addQnaCard({
+      original: fullText,
+      confidence,
+    });
+  } else {
+    store.updateQnaCard(state.mergeCardId, { original: fullText });
+  }
+
+  if (wordCount(fullText) >= MAX_CARD_WORDS) {
+    flushMergeBuffer(state, confidence);
+    return;
+  }
+
+  scheduleMergeFlush(state);
 }
 
-async function connectDeepgram(): Promise<void> {
+function onUtteranceEnd(state: PipelineState): void {
+  flushMergeBuffer(state, state.lastSegmentConfidence);
+}
+
+async function connectDeepgram(state: PipelineState): Promise<void> {
   const settings = useSettingsStore.getState();
 
-  deepgramClient = new DeepgramClient();
-  await deepgramClient.connect(settings.sourceLanguage, {
+  state.deepgramClient = new DeepgramClient();
+  await state.deepgramClient.connect(settings.sourceLanguage, {
     onInterim: (text, confidence) => {
       if (!text.trim()) return;
       useTranscriptStore.getState().setInterim(text, confidence);
+      scheduleInterimTranslation(text);
     },
-    onFinal: (text, confidence) => {
-      void onFinalTranscript(text, confidence);
+    onFinalSegment: (text, confidence) => {
+      appendFinalSegment(state, text, confidence);
+    },
+    onUtteranceEnd: () => {
+      onUtteranceEnd(state);
     },
     onError: (err) => {
       useTranscriptStore.getState().setDeepgramStatus("error");
@@ -218,7 +287,7 @@ async function connectDeepgram(): Promise<void> {
   });
 }
 
-async function startAudioCapture(): Promise<void> {
+async function startAudioCapture(state: PipelineState): Promise<void> {
   const settings = useSettingsStore.getState();
   const meetingStream = useMeetingStreamStore.getState().stream;
   const useTabAudio = hasMeetingAudio(meetingStream);
@@ -227,20 +296,21 @@ async function startAudioCapture(): Promise<void> {
     await navigator.mediaDevices.getUserMedia({ audio: true });
   }
 
+  const send = (chunk: ArrayBufferLike) => state.deepgramClient?.sendAudio(chunk);
+
   if (useTabAudio && meetingStream) {
-    audioCapture = createAudioCaptureFromStream(meetingStream, (chunk) =>
-      deepgramClient?.sendAudio(chunk)
-    );
+    state.audioCapture = createAudioCaptureFromStream(meetingStream, send);
   } else {
-    audioCapture = createAudioCapture(
+    state.audioCapture = createAudioCapture(
       settings.micDeviceId || undefined,
-      (chunk) => deepgramClient?.sendAudio(chunk)
+      send
     );
   }
-  await audioCapture.start();
+  await state.audioCapture.start();
 }
 
 export async function startListening(): Promise<void> {
+  const state = getPipelineState();
   const settings = useSettingsStore.getState();
   const existingSessionId = useInterviewSessionStore.getState().dbSessionId;
   const isResume = !!existingSessionId;
@@ -252,8 +322,11 @@ export async function startListening(): Promise<void> {
 
   if (!isResume) {
     useTranscriptStore.getState().clearSession();
-    lastFinalHash = "";
+    state.lastFinalHash = "";
+    clearMergeState(state);
     useRecapStore.getState().setSessionStartedAt(Date.now());
+  } else {
+    state.lastFinalHash = "";
   }
 
   try {
@@ -264,8 +337,8 @@ export async function startListening(): Promise<void> {
       );
     }
 
-    await connectDeepgram();
-    await startAudioCapture();
+    await connectDeepgram(state);
+    await startAudioCapture(state);
 
     if (!isResume) {
       const sessionId = await createInterviewSession({
@@ -278,21 +351,37 @@ export async function startListening(): Promise<void> {
       useInterviewSessionStore.getState().setDbSessionId(sessionId);
     }
   } catch (e) {
-    stopAudioOnly();
+    stopAudioOnly(state);
     throw e;
   }
 }
 
 export function stopListening(): void {
-  stopAudioOnly();
+  stopAudioOnly(getPipelineState());
 }
 
 export async function endSession(): Promise<void> {
+  const state = getPipelineState();
+
+  if (state.mergeCardId && state.mergeBufferAcc.length > 0) {
+    const fullText = mergeTranscriptFragments(state.mergeBufferAcc);
+    const cid = state.mergeCardId;
+    const confidence = state.lastSegmentConfidence;
+    cancelMergeDebounce(state);
+    state.mergeBufferAcc = [];
+    state.mergeCardId = null;
+    state.seenSegmentKeys.clear();
+    useTranscriptStore.getState().updateQnaCard(cid, { original: fullText });
+    await processQnaCard(state, cid, fullText, confidence);
+  } else {
+    clearMergeState(state);
+  }
+
   const settings = useSettingsStore.getState();
   const transcript = useTranscriptStore.getState();
   const recap = useRecapStore.getState();
 
-  stopAudioOnly();
+  stopAudioOnly(state);
 
   const sessionId = useInterviewSessionStore.getState().dbSessionId;
   if (sessionId) {
@@ -300,10 +389,9 @@ export async function endSession(): Promise<void> {
     useInterviewSessionStore.getState().setDbSessionId(null);
   }
 
-  const endedAt = Date.now();
   recap.openRecap({
-    startedAt: recap.sessionStartedAt ?? endedAt,
-    endedAt,
+    startedAt: recap.sessionStartedAt ?? Date.now(),
+    endedAt: Date.now(),
     sourceLang: settings.sourceLanguage,
     targetLang: settings.targetLanguage,
     answerStyle: settings.answerStyle,
@@ -312,6 +400,7 @@ export async function endSession(): Promise<void> {
 }
 
 export async function regenerateAnswer(cardId?: string): Promise<void> {
+  const state = getPipelineState();
   const store = useTranscriptStore.getState();
   const card =
     (cardId && store.qnaCards.find((c) => c.id === cardId)) ||
@@ -325,7 +414,7 @@ export async function regenerateAnswer(cardId?: string): Promise<void> {
     return;
   }
 
-  const key = hashText(card.original);
+  const key = hashTranscriptKey(card.original);
   store.unmarkTranscript(key);
   store.updateQnaCard(card.id, {
     answer: null,
@@ -333,5 +422,5 @@ export async function regenerateAnswer(cardId?: string): Promise<void> {
     status: "transcribing",
   });
 
-  await processQnaCard(card.id, card.original, card.confidence || 1);
+  await processQnaCard(state, card.id, card.original, card.confidence || 1);
 }

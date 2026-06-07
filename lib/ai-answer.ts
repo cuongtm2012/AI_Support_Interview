@@ -4,7 +4,7 @@ import type {
   LanguageCode,
   QuestionType,
 } from "@/types";
-import { apiKeyHeaders, getDeepseekApiKey } from "@/lib/api-keys";
+import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
 
 export interface GenerateAnswerParams {
   question: string;
@@ -43,14 +43,16 @@ export async function generateAnswerStreaming(
   const res = await fetch("/api/answer", {
     method: "POST",
     headers: apiKeyHeaders(key),
-    body: JSON.stringify({
-      question: params.question,
-      questionType: params.questionType,
-      profileText: params.profileText,
-      jdText: params.jdText,
-      answerStyle: params.answerStyle,
-      answerLanguage: lang,
-    }),
+    body: JSON.stringify(
+      withApiKey(key, {
+        question: params.question,
+        questionType: params.questionType,
+        profileText: params.profileText,
+        jdText: params.jdText,
+        answerStyle: params.answerStyle,
+        answerLanguage: lang,
+      })
+    ),
     signal: params.signal,
   });
 

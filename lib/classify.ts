@@ -1,5 +1,5 @@
 import type { QuestionClassification, QuestionType } from "@/types";
-import { apiKeyHeaders, getDeepseekApiKey } from "@/lib/api-keys";
+import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
 import {
   formatHintForType,
   heuristicClassify,
@@ -19,7 +19,7 @@ export async function classifyQuestion(
     const res = await fetch("/api/classify-question", {
       method: "POST",
       headers: apiKeyHeaders(key),
-      body: JSON.stringify({ question }),
+      body: JSON.stringify(withApiKey(key, { question })),
     });
 
     if (!res.ok) throw new Error("Classify API failed");

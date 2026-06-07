@@ -11,22 +11,22 @@ import type { QuestionType } from "@/types";
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimitResponse(req);
+  const limited = await rateLimitResponse(req);
   if (limited) return limited;
 
-  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY);
+  let body: { question?: string; apiKey?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY, body);
   if (!apiKey) {
     return NextResponse.json(
       { error: "DeepSeek API key required" },
       { status: 401 }
     );
-  }
-
-  let body: { question?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const question = body.question?.trim();
