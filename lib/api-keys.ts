@@ -1,32 +1,20 @@
+import { useUserApiKeysStore } from "@/stores/user-api-keys";
 import { useSettingsStore } from "@/stores/settings";
 
-export const API_KEY_HEADER = "x-api-key";
-
-/** Headers + optional body field for API proxy (header + body fallback on Vercel). */
-export function apiKeyHeaders(key: string): HeadersInit {
-  return {
-    "Content-Type": "application/json",
-    [API_KEY_HEADER]: key,
-  };
-}
-
-export function withApiKey<T extends Record<string, unknown>>(
-  key: string,
-  payload: T
-): T & { apiKey: string } {
-  return { ...payload, apiKey: key };
-}
-
 export function getDeepgramApiKey(): string {
-  return useSettingsStore.getState().deepgramApiKey.trim();
+  return useUserApiKeysStore.getState().deepgramApiKey.trim();
 }
 
 export function getDeepseekApiKey(): string {
-  return useSettingsStore.getState().deepseekApiKey.trim();
+  return useUserApiKeysStore.getState().deepseekApiKey.trim();
 }
 
 export function getGoogleTranslateApiKey(): string {
   return useSettingsStore.getState().googleTranslateApiKey.trim();
+}
+
+export function areUserApiKeysLoaded(): boolean {
+  return useUserApiKeysStore.getState().loaded;
 }
 
 /** STT (Start Listening) — chỉ cần Deepgram */

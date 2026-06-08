@@ -1,6 +1,6 @@
 "use client";
 
-import { hasRequiredApiKeys } from "@/lib/api-keys";
+import { areUserApiKeysLoaded, hasRequiredApiKeys } from "@/lib/api-keys";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useHydrated } from "@/hooks/useHydrated";
 import { IconAlert } from "@/components/ui/Icons";
@@ -15,7 +15,7 @@ export function ApiKeyBanner({ onOpenSettings }: ApiKeyBannerProps) {
   const { user, loading } = useAuth();
   const { ok, missing } = hasRequiredApiKeys();
 
-  if (!hydrated || loading || !user || ok) return null;
+  if (!hydrated || loading || !user || !areUserApiKeysLoaded() || ok) return null;
 
   return (
     <div

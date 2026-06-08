@@ -17,8 +17,6 @@ import type {
 const defaultPreset = createInterviewPreset("Interview 1");
 
 const defaultSettings = {
-  deepgramApiKey: "",
-  deepseekApiKey: "",
   googleTranslateApiKey: "",
   translationProvider: "deepseek" as TranslationProvider,
   sourceLanguage: "en" as LanguageCode,
@@ -38,7 +36,11 @@ const defaultSettings = {
   darkMode: true,
 };
 
-type PersistedSettings = typeof defaultSettings & { openaiApiKey?: string };
+type PersistedSettings = typeof defaultSettings & {
+  openaiApiKey?: string;
+  deepgramApiKey?: string;
+  deepseekApiKey?: string;
+};
 
 type PresetSyncFields = Pick<
   InterviewPreset,
@@ -193,7 +195,7 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: "interview-copilot-settings",
-      version: 8,
+      version: 9,
       migrate: (persisted, version) => {
         const s = persisted as PersistedSettings & {
           translationProvider?: string;
@@ -206,6 +208,10 @@ export const useSettingsStore = create<SettingsStore>()(
           s.deepseekApiKey = s.openaiApiKey;
         }
         delete s.openaiApiKey;
+        if (version < 9) {
+          delete s.deepgramApiKey;
+          delete s.deepseekApiKey;
+        }
         if (version < 3) {
           s.translationProvider = s.googleTranslateApiKey?.trim()
             ? "google"
@@ -253,8 +259,6 @@ export const useSettingsStore = create<SettingsStore>()(
         return s as SettingsState;
       },
       partialize: (state) => ({
-        deepgramApiKey: state.deepgramApiKey,
-        deepseekApiKey: state.deepseekApiKey,
         googleTranslateApiKey: state.googleTranslateApiKey,
         translationProvider: state.translationProvider,
         sourceLanguage: state.sourceLanguage,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitResponse } from "@/lib/api-guard";
 import { getClientApiKey } from "@/lib/server-api-key";
+import { getUserDeepseekKey } from "@/lib/server-user-api-keys";
 import type { TranslationProvider } from "@/types";
 
 const LANG_MAP: Record<string, string> = {
@@ -100,12 +101,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ translated: text });
   }
 
-  const envFallback =
+  const apiKey =
     provider === "google"
-      ? process.env.GOOGLE_TRANSLATE_API_KEY
-      : process.env.DEEPSEEK_API_KEY;
-
-  const apiKey = getClientApiKey(req, envFallback, body);
+      ? getClientApiKey(req, process.env.GOOGLE_TRANSLATE_API_KEY, body)
+      : await getUserDeepseekKey();
   if (!apiKey) {
     const label = provider === "google" ? "Google Translate" : "DeepSeek";
     return NextResponse.json(

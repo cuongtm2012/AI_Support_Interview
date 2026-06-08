@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitResponse } from "@/lib/api-guard";
-import { getClientApiKey } from "@/lib/server-api-key";
+import { getUserDeepseekKey } from "@/lib/server-user-api-keys";
 import {
   formatHintForType,
   heuristicClassify,
@@ -14,14 +14,14 @@ export async function POST(req: NextRequest) {
   const limited = await rateLimitResponse(req);
   if (limited) return limited;
 
-  let body: { question?: string; apiKey?: string };
+  let body: { question?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY, body);
+  const apiKey = await getUserDeepseekKey();
   if (!apiKey) {
     return NextResponse.json(
       { error: "DeepSeek API key required" },

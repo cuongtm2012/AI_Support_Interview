@@ -30,8 +30,6 @@ export interface QuestionClassification {
 }
 
 export interface ApiKeys {
-  deepgramApiKey: string;
-  deepseekApiKey: string;
   googleTranslateApiKey: string;
 }
 

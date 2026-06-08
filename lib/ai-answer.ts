@@ -5,7 +5,7 @@ import type {
   QuestionType,
 } from "@/types";
 import { resolveAnswerLanguageLabel } from "@/lib/answer-language";
-import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
+import { getDeepseekApiKey } from "@/lib/api-keys";
 
 export interface GenerateAnswerParams {
   question: string;
@@ -24,8 +24,7 @@ export interface GenerateAnswerParams {
 export async function generateAnswerStreaming(
   params: GenerateAnswerParams
 ): Promise<void> {
-  const key = getDeepseekApiKey();
-  if (!key) {
+  if (!getDeepseekApiKey()) {
     throw new Error("DeepSeek API key chưa được cấu hình (Settings → API Keys)");
   }
 
@@ -37,18 +36,16 @@ export async function generateAnswerStreaming(
 
   const res = await fetch("/api/answer", {
     method: "POST",
-    headers: apiKeyHeaders(key),
-    body: JSON.stringify(
-      withApiKey(key, {
-        question: params.question,
-        questionType: params.questionType,
-        candidateContext: params.candidateContext,
-        profileText: params.profileText,
-        jdText: params.jdText,
-        answerStyle: params.answerStyle,
-        answerLanguage: lang,
-      })
-    ),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question: params.question,
+      questionType: params.questionType,
+      candidateContext: params.candidateContext,
+      profileText: params.profileText,
+      jdText: params.jdText,
+      answerStyle: params.answerStyle,
+      answerLanguage: lang,
+    }),
     signal: params.signal,
   });
 

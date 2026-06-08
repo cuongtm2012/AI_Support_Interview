@@ -1,7 +1,11 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { hasRequiredApiKeys, hasDeepseekApiKey } from "@/lib/api-keys";
+import { saveUserApiKeys } from "@/lib/supabase/user-api-keys";
 import { useSettingsStore } from "@/stores/settings";
-import { hasRequiredApiKeys } from "@/lib/api-keys";
+import { useUserApiKeysStore } from "@/stores/user-api-keys";
 import { shouldTranslate } from "@/lib/translation-config";
 import { IconKey, IconCheck, IconAlert } from "@/components/ui/Icons";
 
@@ -12,6 +16,7 @@ function ApiKeyInput({
   required,
   placeholder,
   compact,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -19,6 +24,7 @@ function ApiKeyInput({
   required?: boolean;
   placeholder?: string;
   compact?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -42,7 +48,10 @@ function ApiKeyInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete="off"
-        className={`input-field font-mono ${compact ? "settings-input" : ""}`}
+        disabled={disabled}
+        className={`input-field font-mono ${compact ? "settings-input" : ""} ${
+          disabled ? "opacity-60" : ""
+        }`}
       />
     </div>
   );
@@ -52,9 +61,7 @@ function translationStatusMessage(): string {
   const s = useSettingsStore.getState();
   if (s.translationProvider === "none") return "Dịch: tắt";
   if (s.translationProvider === "deepseek") {
-    return s.deepseekApiKey.trim()
-      ? "Dịch: DeepSeek"
-      : "Dịch: cần DeepSeek key";
+    return hasDeepseekApiKey() ? "Dịch: DeepSeek" : "Dịch: cần DeepSeek key";
   }
   return s.googleTranslateApiKey.trim()
     ? "Dịch: Google"
@@ -66,7 +73,58 @@ export function ApiKeysSection({
 }: {
   variant?: "default" | "compact";
 }) {
+  const { user } = useAuth();
   const settings = useSettingsStore();
+  const deepgramApiKey = useUserApiKeysStore((s) => s.deepgramApiKey);
+  const deepseekApiKey = useUserApiKeysStore((s) => s.deepseekApiKey);
+  const keysLoaded = useUserApiKeysStore((s) => s.loaded);
+  const saving = useUserApiKeysStore((s) => s.saving);
+  const setKeys = useUserApiKeysStore((s) => s.setKeys);
+  const setSaving = useUserApiKeysStore((s) => s.setSaving);
+
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistKeys = useCallback(
+    (next: { deepgramApiKey?: string; deepseekApiKey?: string }) => {
+      if (!user) return;
+
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        void (async () => {
+          setSaving(true);
+          setSaveError(null);
+          const current = useUserApiKeysStore.getState();
+          const result = await saveUserApiKeys(user.id, {
+            deepgramApiKey: next.deepgramApiKey ?? current.deepgramApiKey,
+            deepseekApiKey: next.deepseekApiKey ?? current.deepseekApiKey,
+          });
+          setSaving(false);
+          if (!result.ok) {
+            setSaveError(result.error ?? "Không lưu được API keys.");
+          }
+        })();
+      }, 600);
+    },
+    [user, setSaving]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  const handleDeepgramChange = (v: string) => {
+    setKeys({ deepgramApiKey: v });
+    persistKeys({ deepgramApiKey: v });
+  };
+
+  const handleDeepseekChange = (v: string) => {
+    setKeys({ deepseekApiKey: v });
+    persistKeys({ deepseekApiKey: v });
+  };
+
   const { ok, missing } = hasRequiredApiKeys();
   const compact = variant === "compact";
   const showGoogle = settings.translationProvider === "google";
@@ -74,24 +132,49 @@ export function ApiKeysSection({
     settings.sourceLanguage,
     settings.targetLanguage
   );
+  const disabled = !user || !keysLoaded;
 
   if (compact) {
     return (
       <div className="space-y-2">
+        <p className="text-[10px] text-slate-500">
+          API keys lưu theo tài khoản — đăng ký tại{" "}
+          <a
+            href="https://console.deepgram.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            Deepgram
+          </a>{" "}
+          &{" "}
+          <a
+            href="https://platform.deepseek.com/api_keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            DeepSeek
+          </a>
+          .
+        </p>
+
         <div className={`grid gap-2 ${showGoogle ? "sm:grid-cols-2" : ""}`}>
           <ApiKeyInput
             label="Deepgram"
             required
             compact
-            value={settings.deepgramApiKey}
-            onChange={(v) => settings.setSettings({ deepgramApiKey: v })}
+            disabled={disabled}
+            value={deepgramApiKey}
+            onChange={handleDeepgramChange}
             placeholder="dg_..."
           />
           <ApiKeyInput
             label="DeepSeek"
             compact
-            value={settings.deepseekApiKey}
-            onChange={(v) => settings.setSettings({ deepseekApiKey: v })}
+            disabled={disabled}
+            value={deepseekApiKey}
+            onChange={handleDeepseekChange}
             placeholder="sk-..."
           />
           {showGoogle && (
@@ -114,7 +197,9 @@ export function ApiKeysSection({
             !ok ? "text-live" : "text-slate-500"
           }`}
         >
-          {!ok ? (
+          {!keysLoaded ? (
+            <span className="text-slate-500">Đang tải keys…</span>
+          ) : !ok ? (
             <>
               <IconAlert size={11} className="shrink-0" />
               <span>Thiếu {missing.join(", ")}</span>
@@ -129,14 +214,8 @@ export function ApiKeysSection({
           {translateReady && (
             <span className="text-slate-600">· sẽ dịch khi nghe</span>
           )}
-          <a
-            href="https://platform.deepseek.com/api_keys"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:underline"
-          >
-            Get keys
-          </a>
+          {saving && <span className="text-slate-600">· đang lưu…</span>}
+          {saveError && <span className="text-live">· {saveError}</span>}
         </p>
       </div>
     );
@@ -151,8 +230,8 @@ export function ApiKeysSection({
         <div>
           <h3 className="text-sm font-semibold text-slate-200">API Keys</h3>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            Deepgram bắt buộc cho STT. DeepSeek tùy chọn (gợi ý câu trả lời).
-            Dịch bật trong tab Interview.
+            Deepgram & DeepSeek lưu theo tài khoản — tự đăng ký và nhập key của
+            bạn. Google Translate (nếu dùng) vẫn lưu trên trình duyệt.
           </p>
         </div>
       </div>
@@ -160,14 +239,16 @@ export function ApiKeysSection({
       <ApiKeyInput
         label="Deepgram"
         required
-        value={settings.deepgramApiKey}
-        onChange={(v) => settings.setSettings({ deepgramApiKey: v })}
+        disabled={disabled}
+        value={deepgramApiKey}
+        onChange={handleDeepgramChange}
         placeholder="dg_..."
       />
       <ApiKeyInput
         label="DeepSeek"
-        value={settings.deepseekApiKey}
-        onChange={(v) => settings.setSettings({ deepseekApiKey: v })}
+        disabled={disabled}
+        value={deepseekApiKey}
+        onChange={handleDeepseekChange}
         placeholder="sk-..."
       />
       {showGoogle && (
@@ -180,7 +261,9 @@ export function ApiKeysSection({
       )}
 
       <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-xs">
-        {!ok ? (
+        {!keysLoaded ? (
+          <p className="text-slate-500">Đang tải API keys từ tài khoản…</p>
+        ) : !ok ? (
           <p className="flex items-center gap-2 text-live">
             <IconAlert size={14} />
             Thiếu: {missing.join(", ")}
@@ -192,6 +275,8 @@ export function ApiKeysSection({
           </p>
         )}
         <p className="mt-2 text-slate-600">{translationStatusMessage()}</p>
+        {saving && <p className="mt-1 text-slate-600">Đang lưu…</p>}
+        {saveError && <p className="mt-1 text-live">{saveError}</p>}
       </div>
     </div>
   );

@@ -9,6 +9,10 @@ import {
 } from "react";
 import type { AuthError, User } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  clearUserApiKeysFromStore,
+  syncUserApiKeysForUser,
+} from "@/lib/supabase/user-api-keys";
 
 export type AuthResult =
   | { success: true; message?: string }
@@ -120,6 +124,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [configured]);
 
+  useEffect(() => {
+    if (!configured) return;
+
+    if (!user) {
+      clearUserApiKeysFromStore();
+      return;
+    }
+
+    void syncUserApiKeysForUser(user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync on user id only
+  }, [configured, user?.id]);
+
   const signInWithGoogle = async () => {
     if (!configured) return;
     const supabase = createClient();
@@ -135,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!configured) return;
     const supabase = createClient();
     await supabase.auth.signOut();
+    clearUserApiKeysFromStore();
     setUser(null);
     window.location.href = "/login";
   };

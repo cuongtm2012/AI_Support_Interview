@@ -123,6 +123,35 @@ export type Database = {
           },
         ];
       };
+      user_api_keys: {
+        Row: {
+          deepgram_api_key: string | null;
+          deepseek_api_key: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          deepgram_api_key?: string | null;
+          deepseek_api_key?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          deepgram_api_key?: string | null;
+          deepseek_api_key?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_api_keys_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

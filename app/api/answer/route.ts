@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { rateLimitResponse } from "@/lib/api-guard";
-import { getClientApiKey } from "@/lib/server-api-key";
+import { getUserDeepseekKey } from "@/lib/server-user-api-keys";
 import { answerGuidanceForType, isQuestionType } from "@/lib/question-type";
 import type { QuestionType } from "@/types";
 
@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
     jdText?: string;
     answerStyle?: string;
     answerLanguage?: string;
-    apiKey?: string;
   };
   try {
     body = await req.json();
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY, body);
+  const apiKey = await getUserDeepseekKey();
   if (!apiKey) {
     return new Response(
       JSON.stringify({

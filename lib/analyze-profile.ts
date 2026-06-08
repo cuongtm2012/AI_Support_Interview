@@ -1,18 +1,17 @@
-import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
+import { getDeepseekApiKey } from "@/lib/api-keys";
 
 export async function analyzeProfileAndJd(
   profileText: string,
   jdText: string
 ): Promise<string> {
-  const key = getDeepseekApiKey();
-  if (!key) {
+  if (!getDeepseekApiKey()) {
     throw new Error("Cần DeepSeek API key trong Settings → Keys");
   }
 
   const res = await fetch("/api/analyze-profile", {
     method: "POST",
-    headers: apiKeyHeaders(key),
-    body: JSON.stringify(withApiKey(key, { profileText, jdText })),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileText, jdText }),
   });
 
   if (!res.ok) {

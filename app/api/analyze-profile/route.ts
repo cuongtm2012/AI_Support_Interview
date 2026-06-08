@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitResponse } from "@/lib/api-guard";
-import { getClientApiKey } from "@/lib/server-api-key";
+import { getUserDeepseekKey } from "@/lib/server-user-api-keys";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
@@ -8,14 +8,14 @@ export async function POST(req: NextRequest) {
   const limited = await rateLimitResponse(req);
   if (limited) return limited;
 
-  let body: { profileText?: string; jdText?: string; apiKey?: string };
+  let body: { profileText?: string; jdText?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const apiKey = getClientApiKey(req, process.env.DEEPSEEK_API_KEY, body);
+  const apiKey = await getUserDeepseekKey();
   if (!apiKey) {
     return NextResponse.json(
       { error: "DeepSeek API key required" },

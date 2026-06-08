@@ -5,6 +5,13 @@ export interface Profile {
   created_at: string;
 }
 
+export interface UserApiKeysRow {
+  user_id: string;
+  deepgram_api_key: string | null;
+  deepseek_api_key: string | null;
+  updated_at: string;
+}
+
 export interface InterviewSession {
   id: string;
   user_id: string;

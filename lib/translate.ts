@@ -1,10 +1,6 @@
 import type { LanguageCode } from "@/types";
-import {
-  apiKeyHeaders,
-  getDeepseekApiKey,
-  getGoogleTranslateApiKey,
-  withApiKey,
-} from "@/lib/api-keys";
+import { getDeepseekApiKey, getGoogleTranslateApiKey } from "@/lib/api-keys";
+import { API_KEY_HEADER } from "@/lib/server-api-key";
 import {
   getTranslationProvider,
   shouldTranslate,
@@ -25,10 +21,18 @@ export async function translateText(
 
   if (!key) throw new Error("NO_TRANSLATION");
 
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  const payload: Record<string, string> = { text, source, target, provider };
+
+  if (provider === "google") {
+    headers[API_KEY_HEADER] = key;
+    payload.apiKey = key;
+  }
+
   const res = await fetch("/api/translate", {
     method: "POST",
-    headers: apiKeyHeaders(key),
-    body: JSON.stringify(withApiKey(key, { text, source, target, provider })),
+    headers,
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

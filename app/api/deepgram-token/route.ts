@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitResponse } from "@/lib/api-guard";
-import { getClientApiKey } from "@/lib/server-api-key";
+import { getUserDeepgramKey } from "@/lib/server-user-api-keys";
 
 export async function GET(req: NextRequest) {
   const limited = await rateLimitResponse(req);
   if (limited) return limited;
 
-  const queryKey = req.nextUrl.searchParams.get("apiKey") ?? undefined;
-  const apiKey = getClientApiKey(req, process.env.DEEPGRAM_API_KEY, {
-    apiKey: queryKey,
-  });
+  const apiKey = await getUserDeepgramKey();
   if (!apiKey) {
     return NextResponse.json(
       { error: "Deepgram API key required (Settings → API Keys)" },

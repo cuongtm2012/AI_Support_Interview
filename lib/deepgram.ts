@@ -1,5 +1,5 @@
 import type { LanguageCode } from "@/types";
-import { apiKeyHeaders, getDeepgramApiKey } from "@/lib/api-keys";
+import { getDeepgramApiKey } from "@/lib/api-keys";
 
 export interface DeepgramCallbacks {
   onInterim: (text: string, confidence: number) => void;
@@ -49,9 +49,7 @@ export class DeepgramClient {
       );
     }
 
-    const res = await fetch("/api/deepgram-token", {
-      headers: apiKeyHeaders(apiKey),
-    });
+    const res = await fetch("/api/deepgram-token");
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(
