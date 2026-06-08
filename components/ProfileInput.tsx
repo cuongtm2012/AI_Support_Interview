@@ -7,7 +7,13 @@ import {
   DOCUMENT_UPLOAD_ACCEPT,
   extractTextFromDocument,
 } from "@/lib/document-import";
-import { presetReadiness } from "@/lib/interview-preset-utils";
+import {
+  formatPresetMissingLabels,
+  isValidAge,
+  presetReadiness,
+  type PresetMissingField,
+} from "@/lib/interview-preset-utils";
+import type { CandidateGender } from "@/types";
 import { hasDeepseekApiKey } from "@/lib/api-keys";
 import { Button } from "@/components/ui/Button";
 import {
@@ -122,19 +128,91 @@ function ProfileField({
   );
 }
 
+function CandidateInfoFields() {
+  const { gender, age, interviewRole, setSettings } = useSettingsStore();
+  const ageInvalid = age.trim().length > 0 && !isValidAge(age);
+
+  return (
+    <div className="settings-section space-y-3">
+      <div>
+        <p className="text-xs font-semibold text-slate-200">
+          Thông tin ứng viên
+        </p>
+        <p className="mt-0.5 text-[10px] text-slate-500">
+          Bắt buộc — AI dùng để cá nhân hóa câu trả lời (ngôi xưng, tuổi, vị trí)
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label htmlFor="candidate-gender" className="label-caps mb-1.5 block">
+            Giới tính
+          </label>
+          <select
+            id="candidate-gender"
+            value={gender}
+            onChange={(e) =>
+              setSettings({ gender: e.target.value as CandidateGender | "" })
+            }
+            className="select-field w-full text-sm"
+          >
+            <option value="">— Chọn —</option>
+            <option value="male">Nam</option>
+            <option value="female">Nữ</option>
+            <option value="other">Khác</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="candidate-age" className="label-caps mb-1.5 block">
+            Tuổi
+          </label>
+          <input
+            id="candidate-age"
+            type="number"
+            min={16}
+            max={80}
+            value={age}
+            onChange={(e) => setSettings({ age: e.target.value })}
+            placeholder="vd: 28"
+            className={`input-field w-full text-sm ${ageInvalid ? "auth-input-error" : ""}`}
+          />
+          {ageInvalid && (
+            <p className="auth-error-message mt-1">Tuổi từ 16–80</p>
+          )}
+        </div>
+        <div className="sm:col-span-1">
+          <label htmlFor="candidate-role" className="label-caps mb-1.5 block">
+            Vị trí đang PV
+          </label>
+          <input
+            id="candidate-role"
+            type="text"
+            value={interviewRole}
+            onChange={(e) => setSettings({ interviewRole: e.target.value })}
+            placeholder="vd: Senior Backend Engineer"
+            className="input-field w-full text-sm"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkflowSteps({
   hasPreset,
+  infoOk,
   profileOk,
   jdOk,
   analyzed,
 }: {
   hasPreset: boolean;
+  infoOk: boolean;
   profileOk: boolean;
   jdOk: boolean;
   analyzed: boolean;
 }) {
   const steps = [
     { label: "Chọn bộ", done: hasPreset },
+    { label: "Thông tin", done: infoOk },
     { label: "Profile", done: profileOk },
     { label: "JD", done: jdOk },
     { label: "Phân tích", done: analyzed },
@@ -172,14 +250,28 @@ function PresetManager({ variant }: { variant: "modal" | "default" }) {
   const deleteInterviewPreset = useSettingsStore((s) => s.deleteInterviewPreset);
   const renameInterviewPreset = useSettingsStore((s) => s.renameInterviewPreset);
 
+  const defaultMissing: PresetMissingField[] = [
+    "gender",
+    "age",
+    "role",
+    "profile",
+    "jd",
+  ];
   const readiness = activePreset
     ? presetReadiness(activePreset)
-    : { ok: false, missing: ["profile", "jd"] as const };
+    : { ok: false, missing: defaultMissing };
+
+  const infoOk = activePreset
+    ? !readiness.missing.some((m) =>
+        m === "gender" || m === "age" || m === "role"
+      )
+    : false;
 
   return (
     <div className="settings-section space-y-3">
       <WorkflowSteps
         hasPreset={!!activePreset}
+        infoOk={infoOk}
         profileOk={!!activePreset?.profileText.trim()}
         jdOk={!!activePreset?.jdText.trim()}
         analyzed={!!activePreset?.analysis}
@@ -242,8 +334,8 @@ function PresetManager({ variant }: { variant: "modal" | "default" }) {
           <IconAlert size={14} className="mt-0.5 shrink-0 text-live" />
           <p className="text-[11px] leading-relaxed text-amber-200/90">
             Bộ <strong>{activePreset?.name}</strong> còn thiếu{" "}
-            <strong>{readiness.missing.join(" & ")}</strong>. Nhập đủ trước khi
-            Start Listening.
+            <strong>{formatPresetMissingLabels(readiness.missing)}</strong>.
+            Nhập đủ trước khi Start Listening.
           </p>
         </div>
       )}
@@ -264,7 +356,10 @@ function AnalysisPanel({ modalExpanded }: { modalExpanded?: boolean }) {
 
   const { ok, missing } = activePreset
     ? presetReadiness(activePreset)
-    : { ok: false, missing: ["profile", "jd"] as const };
+    : {
+        ok: false,
+        missing: ["gender", "age", "role", "profile", "jd"] as PresetMissingField[],
+      };
 
   const handleAnalyze = async () => {
     setError(null);
@@ -371,6 +466,7 @@ export function ProfileInput({
   return (
     <div className="space-y-4">
       <PresetManager variant={isModal ? "modal" : "default"} />
+      <CandidateInfoFields />
 
       <div
         className={

@@ -17,7 +17,6 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { IconSettings, IconHistory } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/Panel";
-import { stopListening, regenerateAnswer } from "@/lib/pipeline";
 import { useInterviewStatus } from "@/hooks/useInterviewStatus";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { useMeetingStreamStore } from "@/stores/meeting-stream";
@@ -56,13 +55,15 @@ export function InterviewPage() {
         document.getElementById("mic-toggle")?.click();
       }
       if (e.key === "r" || e.key === "R") {
-        void regenerateAnswer();
+        void import("@/lib/pipeline").then(({ regenerateAnswer }) =>
+          regenerateAnswer()
+        );
       }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      stopListening();
+      void import("@/lib/pipeline").then(({ stopListening }) => stopListening());
     };
   }, []);
 

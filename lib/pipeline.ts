@@ -34,7 +34,10 @@ import {
   isLectureMonologue,
   isLikelyInterviewQuestion,
 } from "@/lib/question-extract";
-import { presetReadiness } from "@/lib/interview-preset-utils";
+import {
+  formatCandidateContext,
+  presetReadiness,
+} from "@/lib/interview-preset-utils";
 import {
   endsWithQuestion,
   endsWithSentence,
@@ -187,9 +190,16 @@ async function processQnaCard(
   });
 
   try {
+    const activePreset = settings.interviewPresets.find(
+      (p) => p.id === settings.activePresetId
+    );
+
     await generateAnswerStreaming({
       question: questionText,
       questionType,
+      candidateContext: activePreset
+        ? formatCandidateContext(activePreset)
+        : "",
       profileText: settings.profileText,
       jdText: settings.jdText,
       answerStyle: settings.answerStyle,

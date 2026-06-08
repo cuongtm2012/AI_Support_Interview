@@ -10,6 +10,7 @@ import { apiKeyHeaders, getDeepseekApiKey, withApiKey } from "@/lib/api-keys";
 export interface GenerateAnswerParams {
   question: string;
   questionType: QuestionType;
+  candidateContext: string;
   profileText: string;
   jdText: string;
   answerStyle: AnswerStyle;
@@ -41,6 +42,7 @@ export async function generateAnswerStreaming(
       withApiKey(key, {
         question: params.question,
         questionType: params.questionType,
+        candidateContext: params.candidateContext,
         profileText: params.profileText,
         jdText: params.jdText,
         answerStyle: params.answerStyle,

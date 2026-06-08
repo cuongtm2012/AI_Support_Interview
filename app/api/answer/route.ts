@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   let body: {
     question?: string;
     questionType?: string;
+    candidateContext?: string;
     profileText?: string;
     jdText?: string;
     answerStyle?: string;
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
   const {
     question,
     questionType: rawType = "behavioral",
+    candidateContext = "",
     profileText = "",
     jdText = "",
     answerStyle = "STAR",
@@ -70,6 +72,7 @@ Preferred format: ${answerStyle}. Answer language: English.
 
 Rules (strict):
 - First person, speaking TO the interviewer (never thank the interviewer for explaining)
+- Use candidate context (gender, age, role) to personalize tone and examples when provided
 - No meta text, no apologies about missing profile/JD, no "based on your question"
 - Concise, practical; use profile/JD when provided, else brief professional examples
 - Output ONLY the answer — no preamble or notes`
@@ -79,6 +82,7 @@ Format: ${answerStyle}. Ngôn ngữ: tiếng Việt.
 
 Quy tắc (bắt buộc):
 - Ngôi thứ nhất, ứng viên trả lời interviewer (không cảm ơn interviewer vì đã giải thích)
+- Dùng thông tin ứng viên (giới tính, tuổi, vị trí) để cá nhân hóa giọng điệu và ví dụ
 - Không meta, không xin lỗi thiếu profile/JD, không "dựa trên câu hỏi"
 - Súc tích, thực tế; dùng profile/JD nếu có, không thì ví dụ chung
 - Chỉ output câu trả lời — không mở đầu hay ghi chú`;
@@ -89,7 +93,10 @@ Quy tắc (bắt buộc):
 
 Question type: ${questionType}
 
-Candidate profile:
+Candidate context (gender, age, role):
+${candidateContext || "(not provided)"}
+
+Candidate profile / CV:
 ${profileText || "(not provided — use concise generic professional examples, do not mention missing profile)"}
 
 Job description:
@@ -101,7 +108,10 @@ Write the candidate's answer (${typeGuidance}):`
 
 Loại: ${questionType}
 
-Hồ sơ ứng viên:
+Thông tin ứng viên (giới tính, tuổi, vị trí):
+${candidateContext || "(chưa có)"}
+
+Hồ sơ / CV:
 ${profileText || "(chưa có — dùng ví dụ chung, không nhắc thiếu profile)"}
 
 JD:

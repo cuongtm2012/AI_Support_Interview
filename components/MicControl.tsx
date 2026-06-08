@@ -9,6 +9,7 @@ import { useInterviewSessionStore } from "@/stores/interview-session";
 import {
   presetReadiness,
   formatPresetMissingLabels,
+  type PresetMissingField,
 } from "@/lib/interview-preset-utils";
 import { Button } from "@/components/ui/Button";
 import { IconMic, IconStop } from "@/components/ui/Icons";
@@ -75,9 +76,9 @@ export function MicControl() {
     }
 
     if (!presetReady) {
-      const missingFields: ("profile" | "jd")[] = activePreset
+      const missingFields: PresetMissingField[] = activePreset
         ? presetReadiness(activePreset).missing
-        : ["profile", "jd"];
+        : ["gender", "age", "role", "profile", "jd"];
       setError(
         activePreset
           ? `Bộ "${activePreset.name}" thiếu ${formatPresetMissingLabels(missingFields)} — mở Settings → Profile`

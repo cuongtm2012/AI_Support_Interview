@@ -35,9 +35,17 @@ export interface ApiKeys {
   googleTranslateApiKey: string;
 }
 
+export type CandidateGender = "male" | "female" | "other";
+
 export interface InterviewPreset {
   id: string;
   name: string;
+  /** Giới tính ứng viên — bắt buộc trước khi Start */
+  gender: CandidateGender | "";
+  /** Tuổi ứng viên — bắt buộc */
+  age: string;
+  /** Vị trí đang phỏng vấn — bắt buộc */
+  interviewRole: string;
   profileText: string;
   jdText: string;
   analysis: string | null;
@@ -53,6 +61,9 @@ export interface Settings extends ApiKeys {
   answerLanguage: AnswerLanguage;
   micDeviceId: string;
   /** Denormalized from active preset — used by pipeline & AI */
+  gender: CandidateGender | "";
+  age: string;
+  interviewRole: string;
   profileText: string;
   jdText: string;
   interviewPresets: InterviewPreset[];

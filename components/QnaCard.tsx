@@ -3,7 +3,6 @@
 import { useSettingsStore } from "@/stores/settings";
 import { resolveAnswerLangCode } from "@/lib/answer-language";
 import { shouldTranslate } from "@/lib/translation-config";
-import { regenerateAnswer } from "@/lib/pipeline";
 import { QuestionTypeBadge } from "@/components/QuestionTypeBadge";
 import { Button } from "@/components/ui/Button";
 import { IconCopy, IconGlobe, IconRefresh, IconVolume } from "@/components/ui/Icons";
@@ -157,7 +156,11 @@ export function QnaCardView({
             size="sm"
             variant="secondary"
             icon={<IconRefresh size={14} />}
-            onClick={() => void regenerateAnswer(card.id)}
+            onClick={() =>
+              void import("@/lib/pipeline").then(({ regenerateAnswer }) =>
+                regenerateAnswer(card.id)
+              )
+            }
             disabled={isLoading}
           >
             Regen
