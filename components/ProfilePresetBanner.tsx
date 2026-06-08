@@ -2,6 +2,7 @@
 
 import { useSettingsStore } from "@/stores/settings";
 import { presetReadiness, formatPresetMissingLabels } from "@/lib/interview-preset-utils";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { useHydrated } from "@/hooks/useHydrated";
 import { IconAlert } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
@@ -12,11 +13,12 @@ interface ProfilePresetBannerProps {
 
 export function ProfilePresetBanner({ onOpenSettings }: ProfilePresetBannerProps) {
   const hydrated = useHydrated();
+  const { user, loading } = useAuth();
   const active = useSettingsStore((s) =>
     s.interviewPresets.find((p) => p.id === s.activePresetId)
   );
 
-  if (!hydrated) return null;
+  if (!hydrated || loading || !user) return null;
 
   if (!active) {
     return (

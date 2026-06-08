@@ -43,7 +43,7 @@ export function InterviewPage() {
   useSessionRealtime();
 
   useEffect(() => {
-    if (configured && !loading && !user) {
+    if (!loading && (!configured || !user)) {
       router.replace("/login");
     }
   }, [configured, loading, user, router]);
@@ -67,7 +67,7 @@ export function InterviewPage() {
     };
   }, []);
 
-  if (configured && (loading || !user)) {
+  if (loading || !configured || !user) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-slate-500">
         Đang tải Interview Copilot…

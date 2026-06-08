@@ -22,7 +22,12 @@ export async function updateSession(request: NextRequest) {
   const key = getSupabaseAnonKey();
   const pathname = request.nextUrl.pathname;
 
+  const isPublic = isPublicPath(pathname);
+
   if (!url || !key) {
+    if (!isPublic) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
     return NextResponse.next({ request });
   }
 
@@ -48,8 +53,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const isPublic = isPublicPath(pathname);
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL("/login", request.url));
